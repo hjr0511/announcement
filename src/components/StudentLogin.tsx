@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { StudentProfile } from '../types';
 import { validateTaiwanId, logAuditEvent } from '../utils/security';
+import { isDemoMode } from '../config/appMode';
 
 interface Props {
   students: StudentProfile[];
@@ -31,6 +32,7 @@ export const StudentLogin: React.FC<Props> = ({
   onSwitchToAdmin,
   onOpenSecurityNotice,
 }) => {
+  const demo = isDemoMode();
   const [studentId, setStudentId] = useState('');
   const [nationalId, setNationalId] = useState('');
   const [showNationalId, setShowNationalId] = useState(false);
@@ -337,38 +339,40 @@ export const StudentLogin: React.FC<Props> = ({
             </button>
           </form>
 
-          {/* Quick Demo Fill Accounts (Essential for User Testing) */}
-          <div className="mt-6 pt-5 border-t border-slate-200">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center">
-                <Sparkles className="w-3 h-3 mr-1 text-amber-500" />
-                點擊一鍵填入測試帳號
-              </span>
-              <span className="text-[10px] text-slate-400">隨選即測</span>
-            </div>
-            
-            <div className="space-y-1.5">
-              {students.map((stu) => (
-                <button
-                  key={stu.studentId}
-                  type="button"
-                  onClick={() => handleQuickFill(stu)}
-                  className="w-full text-left px-3 py-2 bg-slate-50 hover:bg-blue-50/80 border border-slate-200 hover:border-blue-300 rounded-lg text-xs text-slate-700 flex items-center justify-between transition-colors group"
-                >
-                  <div className="flex items-center space-x-2">
-                    <span className="font-semibold text-slate-900 group-hover:text-blue-700">{stu.name}</span>
-                    <span className="text-slate-500 font-mono text-[11px]">{stu.studentId}</span>
-                    <span className="text-[10px] bg-slate-200 group-hover:bg-blue-100 text-slate-600 px-1.5 py-0.5 rounded">
-                      {stu.department.slice(0, 4)}
+          {/* Quick Demo Fill Accounts — 僅 Demo 模式 */}
+          {demo && (
+            <div className="mt-6 pt-5 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center">
+                  <Sparkles className="w-3 h-3 mr-1 text-amber-500" />
+                  點擊一鍵填入測試帳號
+                </span>
+                <span className="text-[10px] text-slate-400">僅 Demo</span>
+              </div>
+
+              <div className="space-y-1.5">
+                {students.map((stu) => (
+                  <button
+                    key={stu.studentId}
+                    type="button"
+                    onClick={() => handleQuickFill(stu)}
+                    className="w-full text-left px-3 py-2 bg-slate-50 hover:bg-blue-50/80 border border-slate-200 hover:border-blue-300 rounded-lg text-xs text-slate-700 flex items-center justify-between transition-colors group"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <span className="font-semibold text-slate-900 group-hover:text-blue-700">{stu.name}</span>
+                      <span className="text-slate-500 font-mono text-[11px]">{stu.studentId}</span>
+                      <span className="text-[10px] bg-slate-200 group-hover:bg-blue-100 text-slate-600 px-1.5 py-0.5 rounded">
+                        {stu.department.slice(0, 4)}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-blue-600 font-medium group-hover:translate-x-0.5 transition-transform">
+                      填入 →
                     </span>
-                  </div>
-                  <span className="text-[10px] text-blue-600 font-medium group-hover:translate-x-0.5 transition-transform">
-                    填入 →
-                  </span>
-                </button>
-              ))}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Administrative Portal Link */}
           <div className="mt-5 text-center">

@@ -37,6 +37,7 @@ import {
 interface Props {
   currentRole: RoleType;
   onRoleChange: (role: RoleType, studentId?: string) => void;
+  allowDemoSwitch?: boolean;
   students: StudentProfile[];
   onUpdateStudents: (updated: StudentProfile[]) => void;
   auditLogs: AuditLogEntry[];
@@ -48,6 +49,7 @@ interface Props {
 export const AdminPortal: React.FC<Props> = ({
   currentRole,
   onRoleChange,
+  allowDemoSwitch = false,
   students,
   onUpdateStudents,
   auditLogs,
@@ -547,44 +549,50 @@ export const AdminPortal: React.FC<Props> = ({
           </p>
         </div>
 
-        {/* Department Switcher Tabs */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => onRoleChange('academic_affairs')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${
-              currentRole === 'academic_affairs'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
-            }`}
-          >
-            <GraduationCap className="w-4 h-4" />
-            <span>教務處 (學籍成績)</span>
-          </button>
+        {/* Department Switcher Tabs — 僅 Demo；正式模式只顯示目前登入處室 */}
+        {allowDemoSwitch ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => onRoleChange('academic_affairs')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${
+                currentRole === 'academic_affairs'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+              }`}
+            >
+              <GraduationCap className="w-4 h-4" />
+              <span>教務處 (學籍成績)</span>
+            </button>
 
-          <button
-            onClick={() => onRoleChange('student_affairs')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${
-              currentRole === 'student_affairs'
-                ? 'bg-amber-600 text-white shadow-md'
-                : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
-            }`}
-          >
-            <Award className="w-4 h-4" />
-            <span>學務處 (生活輔導與獎懲)</span>
-          </button>
+            <button
+              onClick={() => onRoleChange('student_affairs')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${
+                currentRole === 'student_affairs'
+                  ? 'bg-amber-600 text-white shadow-md'
+                  : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
+              }`}
+            >
+              <Award className="w-4 h-4" />
+              <span>學務處 (生活輔導與獎懲)</span>
+            </button>
 
-          <button
-            onClick={() => onRoleChange('system_admin')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${
-              currentRole === 'system_admin'
-                ? 'bg-purple-600 text-white shadow-md'
-                : 'bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>系統與資安稽核處</span>
-          </button>
-        </div>
+            <button
+              onClick={() => onRoleChange('system_admin')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all ${
+                currentRole === 'system_admin'
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>系統與資安稽核處</span>
+            </button>
+          </div>
+        ) : (
+          <div className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+            目前登入處室已鎖定（正式模式）
+          </div>
+        )}
       </div>
 
       {/* RBAC Permission Banner */}
@@ -672,14 +680,16 @@ export const AdminPortal: React.FC<Props> = ({
                 <span>{isNoticeCopied ? '✓ 已複製通知範本' : '複製學生查詢通知'}</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => onRoleChange('student', activeStudent?.studentId)}
-                className="px-3.5 py-2 text-xs font-bold bg-white text-emerald-950 hover:bg-emerald-50 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-emerald-700" />
-                <span>以學生身分預覽前台</span>
-              </button>
+              {allowDemoSwitch && (
+                <button
+                  type="button"
+                  onClick={() => onRoleChange('student', activeStudent?.studentId)}
+                  className="px-3.5 py-2 text-xs font-bold bg-white text-emerald-950 hover:bg-emerald-50 rounded-xl transition-all flex items-center space-x-1.5 shadow-sm"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>以學生身分預覽前台</span>
+                </button>
+              )}
             </div>
           </div>
 

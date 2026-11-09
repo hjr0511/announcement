@@ -22,12 +22,15 @@ import { Navbar } from './components/Navbar';
 import { StudentLogin } from './components/StudentLogin';
 import { StudentPortal } from './components/StudentPortal';
 import { AdminPortal } from './components/AdminPortal';
+import { AdminLogin } from './components/AdminLogin';
 import { SecurityNoticeModal } from './components/SecurityNoticeModal';
 import { DataSyncBanner } from './components/DataSyncBanner';
+import { isDemoMode } from './config/appMode';
 import { ShieldCheck, PhoneCall } from 'lucide-react';
 
 const AUDIT_STORAGE_KEY = 'school_portal_audit_logs';
 const sheetsEnabled = isSheetsEnabled();
+const demoMode = isDemoMode();
 
 export default function App() {
   const [students, setStudents] = useState<StudentProfile[]>(() => {
@@ -43,6 +46,9 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState<RoleType>('student');
   const [currentStudent, setCurrentStudent] = useState<StudentProfile | null>(null);
   const [isStudentLoggedIn, setIsStudentLoggedIn] = useState<boolean>(false);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [authView, setAuthView] = useState<'student' | 'admin'>('student');
+  const [adminDisplayName, setAdminDisplayName] = useState('');
 
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => {
     if (sheetsEnabled) return [];
@@ -231,15 +237,34 @@ export default function App() {
     setCurrentStudent(student);
     setCurrentRole('student');
     setIsStudentLoggedIn(true);
+    setIsAdminLoggedIn(false);
+    setAuthView('student');
+  };
+
+  const handleAdminLoginSuccess = (
+    role: Exclude<RoleType, 'student'>,
+    displayName: string
+  ) => {
+    setCurrentRole(role);
+    setAdminDisplayName(displayName);
+    setIsAdminLoggedIn(true);
+    setIsStudentLoggedIn(false);
+    setCurrentStudent(null);
+    setAuthView('student');
+    refreshAuditFromStorage();
   };
 
   const handleRoleChange = (role: RoleType, studentId?: string) => {
+    // 正式模式禁止漢堡／下拉一鍵切換身分
+    if (!demoMode) return;
+
     setCurrentRole(role);
     if (role === 'student') {
       const target = students.find((s) => s.studentId === studentId) || students[0];
       if (!target) return;
       setCurrentStudent(target);
       setIsStudentLoggedIn(true);
+      setIsAdminLoggedIn(false);
       logAuditEvent({
         operatorRole: 'student',
         operatorName: `${target.name} (學生切換)`,
@@ -251,41 +276,51 @@ export default function App() {
       });
     } else {
       setIsStudentLoggedIn(false);
+      setIsAdminLoggedIn(true);
+      setAdminDisplayName(
+        role === 'academic_affairs'
+          ? '教務處註冊組'
+          : role === 'student_affairs'
+          ? '學務處生輔組'
+          : '系統與資安管理員'
+      );
       logAuditEvent({
         operatorRole: role,
-        operatorName:
-          role === 'academic_affairs'
-            ? '教務處註冊組'
-            : role === 'student_affairs'
-            ? '學務處生輔組'
-            : '系統與資安管理員',
+        operatorName: adminDisplayName || 'Demo 處室切換',
         targetStudentId: '校務處室管理台',
         targetStudentName: '全體學生',
         action: '查詢個人資料',
         securityLevel: '常規',
-        details: `切換進入 ${role} 行政作業管理介面`,
+        details: `Demo 切換進入 ${role} 行政作業管理介面`,
       });
     }
     refreshAuditFromStorage();
   };
 
   const handleLogout = () => {
-    if (currentStudent) {
-      logAuditEvent({
-        operatorRole: currentRole,
-        operatorName: currentStudent.name,
-        targetStudentId: currentStudent.studentId,
-        targetStudentName: currentStudent.name,
-        action: '登入驗證',
-        securityLevel: '常規',
-        details: '使用者已安全登出系統，Session 權限已銷毀',
-      });
-    }
+    const operatorName =
+      currentRole === 'student'
+        ? currentStudent?.name || '學生'
+        : adminDisplayName || '處室人員';
+    logAuditEvent({
+      operatorRole: currentRole,
+      operatorName,
+      targetStudentId: currentStudent?.studentId || '系統',
+      targetStudentName: currentStudent?.name || '工作階段',
+      action: '登入驗證',
+      securityLevel: '常規',
+      details: '使用者已安全登出系統，Session 權限已銷毀',
+    });
     setIsStudentLoggedIn(false);
+    setIsAdminLoggedIn(false);
     setCurrentStudent(null);
+    setAdminDisplayName('');
     setCurrentRole('student');
+    setAuthView('student');
     refreshAuditFromStorage();
   };
+
+  const isLoggedIn = isStudentLoggedIn || isAdminLoggedIn;
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-800 antialiased selection:bg-blue-600 selection:text-white">
@@ -306,6 +341,8 @@ export default function App() {
         onLogout={handleLogout}
         onOpenSecurityNotice={() => setIsSecurityNoticeOpen(true)}
         allStudents={students}
+        allowDemoSwitch={demoMode}
+        isLoggedIn={isLoggedIn}
       />
 
       <main className="flex-1 pb-12">
@@ -315,16 +352,29 @@ export default function App() {
           </div>
         ) : (
           <>
-            {currentRole === 'student' && !isStudentLoggedIn && (
+            {!isLoggedIn && authView === 'student' && (
               <StudentLogin
                 students={students}
                 onLoginSuccess={handleStudentLoginSuccess}
-                onSwitchToAdmin={() => handleRoleChange('academic_affairs')}
+                onSwitchToAdmin={() => {
+                  if (demoMode) {
+                    handleRoleChange('academic_affairs');
+                  } else {
+                    setAuthView('admin');
+                  }
+                }}
                 onOpenSecurityNotice={() => setIsSecurityNoticeOpen(true)}
               />
             )}
 
-            {currentRole === 'student' && isStudentLoggedIn && currentStudent && (
+            {!isLoggedIn && authView === 'admin' && (
+              <AdminLogin
+                onLoginSuccess={handleAdminLoginSuccess}
+                onBackToStudent={() => setAuthView('student')}
+              />
+            )}
+
+            {isStudentLoggedIn && currentStudent && (
               <StudentPortal
                 student={currentStudent}
                 onUpdateStudent={handleUpdateStudent}
@@ -334,10 +384,11 @@ export default function App() {
               />
             )}
 
-            {currentRole !== 'student' && (
+            {isAdminLoggedIn && currentRole !== 'student' && (
               <AdminPortal
                 currentRole={currentRole}
                 onRoleChange={handleRoleChange}
+                allowDemoSwitch={demoMode}
                 students={students}
                 onUpdateStudents={handleUpdateStudents}
                 auditLogs={auditLogs}
