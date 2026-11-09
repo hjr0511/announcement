@@ -124,6 +124,23 @@ export const INITIAL_STUDENTS: StudentProfile[] = [
       truancyHours: 0,
       attendanceRate: 98.6,
     },
+    accessCodes: [
+      {
+        id: 'AC-S1121001-MOCK1',
+        codeType: 'mock_exam',
+        label: '113學年度第1次模擬考',
+        password: 'MOCK-8812',
+        updatedAt: '2026-11-01 09:00:00',
+        note: '由教務處核發，僅限本人使用',
+      },
+      {
+        id: 'AC-S1121001-ENG',
+        codeType: 'english_test',
+        label: '校內英語能力檢測報名碼',
+        password: 'ENG-3391',
+        updatedAt: '2026-10-20 14:00:00',
+      },
+    ],
   },
   {
     studentId: 'S1121002',
@@ -192,6 +209,15 @@ export const INITIAL_STUDENTS: StudentProfile[] = [
       truancyHours: 0,
       attendanceRate: 99.2,
     },
+    accessCodes: [
+      {
+        id: 'AC-S1121002-MOCK1',
+        codeType: 'mock_exam',
+        label: '113學年度第1次模擬考',
+        password: 'MOCK-5520',
+        updatedAt: '2026-11-01 09:00:00',
+      },
+    ],
   },
   {
     studentId: 'S1112003',
@@ -260,6 +286,15 @@ export const INITIAL_STUDENTS: StudentProfile[] = [
       truancyHours: 0,
       attendanceRate: 97.8,
     },
+    accessCodes: [
+      {
+        id: 'AC-S1112003-MOCK1',
+        codeType: 'mock_exam',
+        label: '113學年度第1次模擬考',
+        password: 'MOCK-7741',
+        updatedAt: '2026-11-01 09:00:00',
+      },
+    ],
   },
 ];
 

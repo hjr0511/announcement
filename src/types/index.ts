@@ -90,6 +90,20 @@ export interface StudentProfile {
   // 學務處資料
   disciplinaryRecords: DisciplinaryRecord[];
   attendance: AttendanceRecord;
+
+  /** 教務／處室核發的個人通行碼（模擬考、英檢報名等） */
+  accessCodes?: AccessCode[];
+}
+
+export type AccessCodeType = 'mock_exam' | 'english_test' | 'event' | 'other';
+
+export interface AccessCode {
+  id: string;
+  codeType: AccessCodeType;
+  label: string; // 例如：113-1 第一次模擬考
+  password: string;
+  updatedAt?: string;
+  note?: string;
 }
 
 export interface AuditLogEntry {

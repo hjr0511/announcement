@@ -35,7 +35,9 @@ import {
   FileCheck,
   Calendar,
   Sparkles,
-  Check
+  Check,
+  Copy,
+  KeyRound
 } from 'lucide-react';
 
 interface Props {
@@ -53,7 +55,11 @@ export const StudentPortal: React.FC<Props> = ({
   onUploadDoc,
   onOpenSecurityNotice,
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'grades' | 'transcript' | 'verification' | 'upload'>('grades');
+  const [activeTab, setActiveTab] = useState<
+    'profile' | 'grades' | 'transcript' | 'verification' | 'upload' | 'access_codes'
+  >('grades');
+  const [revealedCodeIds, setRevealedCodeIds] = useState<Record<string, boolean>>({});
+  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
   const [selectedSemesterId, setSelectedSemesterId] = useState<string>(
     student.semesters[0]?.semesterId || '113-1'
   );
@@ -423,6 +429,23 @@ export const StudentPortal: React.FC<Props> = ({
           {studentDocs.length > 0 && (
             <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
               {studentDocs.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('access_codes')}
+          className={`flex items-center space-x-2 px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-all ${
+            activeTab === 'access_codes'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <KeyRound className="w-4 h-4" />
+          <span>我的通行碼</span>
+          {(student.accessCodes?.length || 0) > 0 && (
+            <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+              {student.accessCodes!.length}
             </span>
           )}
         </button>
@@ -1316,6 +1339,108 @@ export const StudentPortal: React.FC<Props> = ({
             )}
           </div>
 
+        </div>
+      )}
+
+      {/* TAB: 我的通行碼（模擬考／英檢等） */}
+      {activeTab === 'access_codes' && (
+        <div className="space-y-4">
+          <div className="bg-gradient-to-r from-indigo-700 to-blue-700 rounded-3xl p-5 text-white shadow-md">
+            <div className="flex items-center space-x-2">
+              <KeyRound className="w-5 h-5" />
+              <h3 className="font-bold text-base">我的個人通行碼</h3>
+            </div>
+            <p className="text-indigo-100 text-xs mt-1.5 leading-relaxed">
+              由教務處核發的模擬考、英檢報名等密碼。僅在您以學號與身分證登入後可見，請勿轉傳他人。
+            </p>
+          </div>
+
+          {(student.accessCodes || []).length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+              目前尚無通行碼。若老師已公告模擬考密碼開放查詢，請稍後再重新整理，或洽詢教務處。
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {(student.accessCodes || []).map((code) => {
+                const revealed = !!revealedCodeIds[code.id];
+                const typeLabel =
+                  code.codeType === 'mock_exam'
+                    ? '模擬考'
+                    : code.codeType === 'english_test'
+                    ? '英語檢測'
+                    : code.codeType === 'event'
+                    ? '活動報到'
+                    : '其他';
+                return (
+                  <div
+                    key={code.id}
+                    className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          {typeLabel}
+                        </span>
+                        <span className="font-bold text-slate-900 text-sm">{code.label}</span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-xs text-slate-500">密碼：</span>
+                        <code className="font-mono text-sm font-bold text-slate-900 tracking-wider bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+                          {revealed ? code.password : '••••••••'}
+                        </code>
+                      </div>
+                      {code.updatedAt && (
+                        <p className="text-[11px] text-slate-400 mt-1.5">更新時間：{code.updatedAt}</p>
+                      )}
+                      {code.note && (
+                        <p className="text-[11px] text-slate-500 mt-0.5">{code.note}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRevealedCodeIds((prev) => ({
+                            ...prev,
+                            [code.id]: !prev[code.id],
+                          }))
+                        }
+                        className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 flex items-center gap-1.5"
+                      >
+                        {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        <span>{revealed ? '隱藏' : '顯示'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(code.password);
+                            setCopiedCodeId(code.id);
+                            logAuditEvent({
+                              operatorRole: 'student',
+                              operatorName: `${student.name} (學生本人)`,
+                              targetStudentId: student.studentId,
+                              targetStudentName: student.name,
+                              action: '查詢個人資料',
+                              securityLevel: '敏感調閱',
+                              details: `複製通行碼：${code.label}`,
+                            });
+                            setTimeout(() => setCopiedCodeId(null), 2000);
+                          } catch {
+                            alert('無法複製，請改用手動選取');
+                          }
+                        }}
+                        className="px-3 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>{copiedCodeId === code.id ? '已複製' : '複製'}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

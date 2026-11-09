@@ -85,7 +85,7 @@ export const AdminPortal: React.FC<Props> = ({
   const [isGradePublished, setIsGradePublished] = useState(true);
   const [showGuideBanner, setShowGuideBanner] = useState(true);
   const [isNoticeCopied, setIsNoticeCopied] = useState(false);
-  const [csvImportMode, setCsvImportMode] = useState<'grades' | 'students'>('grades');
+  const [csvImportMode, setCsvImportMode] = useState<'grades' | 'students' | 'access_codes'>('grades');
 
   // 新增科目成績 Modal 狀態
   const [isAddCourseModalOpen, setIsAddCourseModalOpen] = useState(false);
@@ -412,6 +412,61 @@ export const AdminPortal: React.FC<Props> = ({
           setCsvSuccessMsg(null);
           setCsvContent('');
         }, 1800);
+      } else if (csvImportMode === 'access_codes') {
+        // 格式: 學號,用途,名稱,密碼
+        // 用途: mock_exam|english_test|event|other 或 模擬考|英檢|活動|其他
+        const mapType = (raw: string): 'mock_exam' | 'english_test' | 'event' | 'other' => {
+          const t = raw.trim().toLowerCase();
+          if (t === 'mock_exam' || t === '模擬考') return 'mock_exam';
+          if (t === 'english_test' || t === '英檢' || t === '英語') return 'english_test';
+          if (t === 'event' || t === '活動') return 'event';
+          return 'other';
+        };
+        const now = new Date().toLocaleString('zh-TW', { hour12: false });
+        const newStudents = students.map((stu) => {
+          let codes = [...(stu.accessCodes || [])];
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(',').map((c) => c.trim());
+            if (cols.length < 4) continue;
+            const [sId, typeRaw, label, password] = cols;
+            if (sId.toUpperCase() !== stu.studentId.toUpperCase()) continue;
+            const codeType = mapType(typeRaw);
+            const existingIdx = codes.findIndex(
+              (c) => c.label === label || (c.codeType === codeType && c.label === label)
+            );
+            const next = {
+              id:
+                existingIdx >= 0
+                  ? codes[existingIdx].id
+                  : `AC-${stu.studentId}-${Date.now().toString(36)}-${i}`,
+              codeType,
+              label,
+              password,
+              updatedAt: now,
+              note: cols[4] || codes[existingIdx]?.note,
+            };
+            if (existingIdx >= 0) codes[existingIdx] = next;
+            else codes = [next, ...codes];
+            importedCount++;
+          }
+          return { ...stu, accessCodes: codes };
+        });
+        onUpdateStudents(newStudents);
+        logAuditEvent({
+          operatorRole: 'academic_affairs',
+          operatorName: '教務處註冊組組長',
+          targetStudentId: '通行碼匯入',
+          targetStudentName: `${importedCount} 筆`,
+          action: '教務處成績修改',
+          securityLevel: '關鍵變更',
+          details: `批次匯入學生通行碼（模擬考／英檢等）共 ${importedCount} 筆`,
+        });
+        setCsvSuccessMsg(`✓ 成功匯入 ${importedCount} 筆通行碼！學生登入後可於「我的通行碼」查看。`);
+        setTimeout(() => {
+          setIsCsvModalOpen(false);
+          setCsvSuccessMsg(null);
+          setCsvContent('');
+        }, 1800);
       } else {
         // 學生學籍名冊匯入模式: 學號,身分證字號,姓名,學系,年級,聯絡電話
         const newStudents = [...students];
@@ -477,6 +532,7 @@ export const AdminPortal: React.FC<Props> = ({
                 ],
                 disciplinaryRecords: [],
                 attendance: { leaveDays: 0, sickLeaveDays: 0, officialLeaveDays: 0, truancyHours: 0, attendanceRate: 100 },
+                accessCodes: [],
               });
             }
             importedCount++;
@@ -517,6 +573,11 @@ export const AdminPortal: React.FC<Props> = ({
       header = '學號,科目代碼,科目名稱,學分,類別,成績\n';
       sample = 'S1121001,CS325,雲端架構與微服務,3,選修,95\nS1121002,FIN325,永續金融與ESG投資,3,選修,92\nS1112003,ME420,智慧精密製造,3,選修,88\n';
       filename = '學生成績批次匯入範本_教務處.csv';
+    } else if (csvImportMode === 'access_codes') {
+      header = '學號,用途,名稱,密碼\n';
+      sample =
+        'S1121001,模擬考,113學年度第1次模擬考,MOCK-8812\nS1121002,模擬考,113學年度第1次模擬考,MOCK-5520\nS1112003,模擬考,113學年度第1次模擬考,MOCK-7741\n';
+      filename = '學生通行碼_模擬考匯入範本_教務處.csv';
     } else {
       header = '學號,身分證字號,姓名,學系,年級,聯絡電話\n';
       sample = 'S1121099,A123456789,測試生,資訊工程學系,3,0912-345-678\n';
@@ -608,7 +669,7 @@ export const AdminPortal: React.FC<Props> = ({
           <span>
             {currentRole === 'academic_affairs' && (
               <>
-                <strong>教務處授權權限：</strong>可管理全校學籍名冊、批次匯入 CSV、修訂學科成績、發布成績通知單。
+                <strong>教務處授權權限：</strong>可管理學籍名冊、批次匯入成績／模擬考通行碼、修訂學科成績、發布成績通知。
                 <span className="text-emerald-700 ml-1 font-semibold">[限制：生活獎懲與諮商輔導為學務處權責，無法竄改]</span>
               </>
             )}
@@ -1277,20 +1338,20 @@ export const AdminPortal: React.FC<Props> = ({
             </div>
 
             {/* Mode Selector Tabs */}
-            <div className="flex rounded-xl bg-slate-100 p-1 text-xs font-bold">
+            <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 text-[11px] font-bold">
               <button
                 type="button"
                 onClick={() => {
                   setCsvImportMode('grades');
                   setCsvContent('');
                 }}
-                className={`flex-1 py-1.5 rounded-lg transition-all ${
+                className={`py-1.5 rounded-lg transition-all ${
                   csvImportMode === 'grades'
                     ? 'bg-white text-emerald-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                📊 批次匯入科目成績 (全班/全校)
+                科目成績
               </button>
               <button
                 type="button"
@@ -1298,13 +1359,27 @@ export const AdminPortal: React.FC<Props> = ({
                   setCsvImportMode('students');
                   setCsvContent('');
                 }}
-                className={`flex-1 py-1.5 rounded-lg transition-all ${
+                className={`py-1.5 rounded-lg transition-all ${
                   csvImportMode === 'students'
                     ? 'bg-white text-blue-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                👥 批次匯入學生學籍名冊
+                學籍名冊
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCsvImportMode('access_codes');
+                  setCsvContent('');
+                }}
+                className={`py-1.5 rounded-lg transition-all ${
+                  csvImportMode === 'access_codes'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                模擬考通行碼
               </button>
             </div>
 
@@ -1315,19 +1390,21 @@ export const AdminPortal: React.FC<Props> = ({
             )}
 
             <div className="text-xs text-slate-600 space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="font-semibold text-slate-700">
                   {csvImportMode === 'grades'
-                    ? '欄位順序：學號,科目代碼,科目名稱,學分,類別,成績'
-                    : '欄位順序：學號,身分證字號,姓名,學系,年級,聯絡電話'}
+                    ? '欄位：學號,科目代碼,科目名稱,學分,類別,成績'
+                    : csvImportMode === 'access_codes'
+                    ? '欄位：學號,用途(模擬考/英檢/活動),名稱,密碼'
+                    : '欄位：學號,身分證字號,姓名,學系,年級,聯絡電話'}
                 </span>
                 <button
                   type="button"
                   onClick={downloadCsvTemplate}
-                  className="text-blue-600 underline font-semibold flex items-center space-x-1"
+                  className="text-blue-600 underline font-semibold flex items-center space-x-1 shrink-0"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>下載官方 CSV 範本</span>
+                  <span>下載範本</span>
                 </button>
               </div>
 
@@ -1336,8 +1413,10 @@ export const AdminPortal: React.FC<Props> = ({
                 onChange={(e) => setCsvContent(e.target.value)}
                 placeholder={
                   csvImportMode === 'grades'
-                    ? `學號,科目代碼,科目名稱,學分,類別,成績\nS1121001,CS325,雲端架構與微服務,3,選修,95\nS1121002,FIN325,永續金融與ESG投資,3,選修,92\nS1112003,ME420,智慧精密製造,3,選修,88`
-                    : `學號,身分證字號,姓名,學系,年級,聯絡電話\nS1121088,A123456789,趙冠宇,資訊工程學系,3,0912-888-777\nS1121089,B220145675,黃羽婷,財務金融學系,3,0933-444-555`
+                    ? `學號,科目代碼,科目名稱,學分,類別,成績\nS1121001,CS325,雲端架構與微服務,3,選修,95`
+                    : csvImportMode === 'access_codes'
+                    ? `學號,用途,名稱,密碼\nS1121001,模擬考,113學年度第1次模擬考,MOCK-8812\nS1121002,模擬考,113學年度第1次模擬考,MOCK-5520`
+                    : `學號,身分證字號,姓名,學系,年級,聯絡電話\nS1121088,A123456789,趙冠宇,資訊工程學系,3,0912-888-777`
                 }
                 rows={6}
                 className="w-full p-3 font-mono text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500"

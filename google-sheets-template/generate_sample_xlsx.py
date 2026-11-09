@@ -322,6 +322,17 @@ for row in [
     ws.append(row)
 autosize(ws)
 
+ws = wb.create_sheet("通行碼")
+style_header(ws, ["id", "studentId", "codeType", "label", "password", "updatedAt", "note"])
+for row in [
+    ["AC-S1121001-MOCK1", "S1121001", "mock_exam", "113學年度第1次模擬考", "MOCK-8812", "2026-11-01 09:00:00", "由教務處核發"],
+    ["AC-S1121001-ENG", "S1121001", "english_test", "校內英語能力檢測報名碼", "ENG-3391", "2026-10-20 14:00:00", ""],
+    ["AC-S1121002-MOCK1", "S1121002", "mock_exam", "113學年度第1次模擬考", "MOCK-5520", "2026-11-01 09:00:00", ""],
+    ["AC-S1112003-MOCK1", "S1112003", "mock_exam", "113學年度第1次模擬考", "MOCK-7741", "2026-11-01 09:00:00", ""],
+]:
+    ws.append(row)
+autosize(ws)
+
 ws = wb.create_sheet("稽核日誌")
 style_header(
     ws,

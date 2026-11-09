@@ -13,7 +13,7 @@
  * 6. 重新 npm run dev；前端會自動載入，若表是空的可一鍵寫入範例資料
  *
  * 工作表（自動建立）：
- * 學籍 / 學期彙總 / 成績科目 / 獎懲 / 出缺勤 / 文件審核 / 稽核日誌
+ * 學籍 / 學期彙總 / 成績科目 / 獎懲 / 出缺勤 / 通行碼 / 文件審核 / 稽核日誌
  */
 
 var SHEET_NAMES = {
@@ -22,6 +22,7 @@ var SHEET_NAMES = {
   courses: '成績科目',
   discipline: '獎懲',
   attendance: '出缺勤',
+  accessCodes: '通行碼',
   documents: '文件審核',
   audit: '稽核日誌',
 };
@@ -167,6 +168,10 @@ function ensureSheets_() {
       ],
     ],
     [
+      SHEET_NAMES.accessCodes,
+      ['id', 'studentId', 'codeType', 'label', 'password', 'updatedAt', 'note'],
+    ],
+    [
       SHEET_NAMES.documents,
       [
         'id',
@@ -288,6 +293,7 @@ function readAll_() {
   var courseRows = readRows_(SHEET_NAMES.courses);
   var disciplineRows = readRows_(SHEET_NAMES.discipline);
   var attendanceRows = readRows_(SHEET_NAMES.attendance);
+  var accessCodeRows = readRows_(SHEET_NAMES.accessCodes);
   var documentRows = readRows_(SHEET_NAMES.documents);
   var auditRows = readRows_(SHEET_NAMES.audit);
 
@@ -360,6 +366,21 @@ function readAll_() {
         return String(a.studentId).trim() === sid;
       })[0] || {};
 
+    var accessCodes = accessCodeRows
+      .filter(function (c) {
+        return String(c.studentId).trim() === sid;
+      })
+      .map(function (c) {
+        return {
+          id: String(c.id || ''),
+          codeType: String(c.codeType || 'other'),
+          label: String(c.label || ''),
+          password: String(c.password || ''),
+          updatedAt: c.updatedAt ? String(c.updatedAt) : undefined,
+          note: c.note ? String(c.note) : undefined,
+        };
+      });
+
     return {
       studentId: sid,
       nationalId: String(s.nationalId || ''),
@@ -400,6 +421,7 @@ function readAll_() {
         truancyHours: toNum_(att.truancyHours, 0),
         attendanceRate: toNum_(att.attendanceRate, 100),
       },
+      accessCodes: accessCodes,
     };
   });
 
@@ -520,6 +542,15 @@ function writeAll_(data) {
     'truancyHours',
     'attendanceRate',
   ];
+  var accessCodeHeaders = [
+    'id',
+    'studentId',
+    'codeType',
+    'label',
+    'password',
+    'updatedAt',
+    'note',
+  ];
   var documentHeaders = [
     'id',
     'studentId',
@@ -550,6 +581,7 @@ function writeAll_(data) {
   var courseFlat = [];
   var disciplineFlat = [];
   var attendanceFlat = [];
+  var accessCodeFlat = [];
 
   students.forEach(function (s) {
     studentFlat.push({
@@ -641,6 +673,18 @@ function writeAll_(data) {
       truancyHours: att.truancyHours || 0,
       attendanceRate: att.attendanceRate || 100,
     });
+
+    (s.accessCodes || []).forEach(function (c) {
+      accessCodeFlat.push({
+        id: c.id,
+        studentId: s.studentId,
+        codeType: c.codeType || 'other',
+        label: c.label || '',
+        password: c.password || '',
+        updatedAt: c.updatedAt || '',
+        note: c.note || '',
+      });
+    });
   });
 
   writeRows_(SHEET_NAMES.students, studentHeaders, studentFlat);
@@ -648,6 +692,7 @@ function writeAll_(data) {
   writeRows_(SHEET_NAMES.courses, courseHeaders, courseFlat);
   writeRows_(SHEET_NAMES.discipline, disciplineHeaders, disciplineFlat);
   writeRows_(SHEET_NAMES.attendance, attendanceHeaders, attendanceFlat);
+  writeRows_(SHEET_NAMES.accessCodes, accessCodeHeaders, accessCodeFlat);
   writeRows_(SHEET_NAMES.documents, documentHeaders, documents);
   writeRows_(SHEET_NAMES.audit, auditHeaders, auditLogs);
 }
