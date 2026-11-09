@@ -5,6 +5,8 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    // 本機預設 `/`；GitHub Actions 會注入 VITE_BASE_PATH=/announcement/
+    base: process.env.VITE_BASE_PATH || '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
