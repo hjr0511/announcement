@@ -20,6 +20,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # 允許稍後把 docs/ 推回 main
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -29,32 +32,37 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      # 目前 repo Pages 仍指向 main，因此建置到 /docs 並用根目錄導向
+      # Pages 目前從 main 發佈，因此把建置結果放進 docs/
+      # （讀取 .env.production 的 VITE_SHEETS_API_URL，勿用空的 secret 蓋掉）
       - name: Build for docs folder
         run: npm run build
         env:
           VITE_BASE_PATH: /announcement/docs/
-          VITE_SHEETS_API_URL: ${{ secrets.VITE_SHEETS_API_URL }}
 
       - name: Add .nojekyll
         run: touch dist/.nojekyll
 
-      - name: Publish built site to docs/ on main
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          publish_branch: main
-          destination_dir: docs
-          keep_files: true
-          commit_message: 'chore: update GitHub Pages docs build'
+      - name: Commit docs/ to main
+        run: |
+          set -e
+          rm -rf docs
+          mkdir -p docs
+          cp -a dist/. docs/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if git diff --staged --quiet; then
+            echo "docs/ unchanged"
+          else
+            git commit -m "chore: update GitHub Pages docs build"
+            git push origin HEAD:main
+          fi
 
-      # 同時保留 gh-pages（之後若改成正確 Pages 設定可直接用）
+      # 同步一份到 gh-pages（之後若改 Pages 來源為 gh-pages 可直接用）
       - name: Build for gh-pages
         run: npm run build
         env:
           VITE_BASE_PATH: /announcement/
-          VITE_SHEETS_API_URL: ${{ secrets.VITE_SHEETS_API_URL }}
 
       - name: Add .nojekyll for gh-pages
         run: touch dist/.nojekyll

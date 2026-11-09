@@ -9,20 +9,14 @@
     <meta property="og:description" content="符合資安規範的學生學籍與成績查詢系統，支援雙因子認證、成績單PDF下載、個資線上確認與處室分級權限管理。" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <!-- GitHub Pages（main/root）導向建置後的 docs；本機開發請用 npm run dev -->
+    <!-- 僅在 GitHub Pages 導向建置後的 /docs/；本機 npm run dev 不受影響 -->
     <script>
       (function () {
-        var host = location.hostname;
-        var isPages = host.endsWith('github.io');
-        if (isPages) {
-          var target = location.pathname.indexOf('/docs') === -1
-            ? (location.pathname.replace(/\/?$/, '/') + 'docs/')
-            : null;
-          if (target) {
-            location.replace(target + location.search + location.hash);
-            return;
-          }
-        }
+        var host = location.hostname || '';
+        if (!host.endsWith('github.io')) return;
+        if (location.pathname.indexOf('/docs') !== -1) return;
+        var base = location.pathname.replace(/\/?$/, '/');
+        location.replace(base + 'docs/' + location.search + location.hash);
       })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,7 +25,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- 本機 Vite 開發入口；GitHub Pages 會先被上方 script 導向 /docs/ -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
