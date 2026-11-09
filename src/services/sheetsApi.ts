@@ -18,11 +18,35 @@ export type SheetsSyncStatus =
   | 'local'
   | 'error';
 
-const API_URL = (import.meta.env.VITE_SHEETS_API_URL as string | undefined)?.trim() || '';
+/**
+ * 學校 Workspace 網址：
+ *   https://script.google.com/a/macros/xxx.edu.tw/s/ID/exec
+ * 對外呼叫建議改成：
+ *   https://script.google.com/macros/s/ID/exec
+ */
+function normalizeSheetsUrl(raw: string): string {
+  const url = raw.trim().replace(/\/+$/, '');
+  if (!url) return '';
+  const m = url.match(
+    /^https:\/\/script\.google\.com\/a\/macros\/[^/]+\/s\/([^/]+)\/exec\/?$/i
+  );
+  if (m) {
+    return `https://script.google.com/macros/s/${m[1]}/exec`;
+  }
+  return url;
+}
+
+const API_URL = normalizeSheetsUrl(
+  (import.meta.env.VITE_SHEETS_API_URL as string | undefined) || ''
+);
 
 /** 是否已設定試算表 API（未設定則走本機 mock / localStorage） */
 export function isSheetsEnabled(): boolean {
   return Boolean(API_URL);
+}
+
+export function getSheetsApiUrl(): string {
+  return API_URL;
 }
 
 async function postJson<T>(payload: unknown): Promise<T> {
@@ -42,7 +66,19 @@ async function postJson<T>(payload: unknown): Promise<T> {
     throw new Error(`試算表 API HTTP ${res.status}`);
   }
 
-  const json = await res.json();
+  const text = await res.text();
+  if (text.trim().startsWith('<!DOCTYPE') || text.includes('Sign in - Google Accounts')) {
+    throw new Error(
+      'Apps Script 需要登入（權限未設成「任何人」）。請重新部署：執行身分=我、存取權=任何人'
+    );
+  }
+
+  let json: { ok?: boolean; error?: string };
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error('試算表 API 回傳不是 JSON，請確認部署網址與權限');
+  }
   if (!json.ok) {
     throw new Error(json.error || '試算表 API 回傳失敗');
   }
@@ -59,7 +95,20 @@ async function getJson<T>(action: string): Promise<T> {
   if (!res.ok) {
     throw new Error(`試算表 API HTTP ${res.status}`);
   }
-  const json = await res.json();
+
+  const text = await res.text();
+  if (text.trim().startsWith('<!DOCTYPE') || text.includes('Sign in - Google Accounts')) {
+    throw new Error(
+      'Apps Script 需要登入（權限未設成「任何人」）。請重新部署：執行身分=我、存取權=任何人'
+    );
+  }
+
+  let json: { ok?: boolean; error?: string };
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error('試算表 API 回傳不是 JSON，請確認部署網址與權限');
+  }
   if (!json.ok) {
     throw new Error(json.error || '試算表 API 回傳失敗');
   }
@@ -71,7 +120,6 @@ export async function pingSheets(): Promise<boolean> {
     await getJson<{ ok: boolean }>('ping');
     return true;
   } catch {
-    // 部分部署環境 GET 參數不穩，改用 POST
     try {
       await postJson<{ ok: boolean }>({ action: 'getAll' });
       return true;
