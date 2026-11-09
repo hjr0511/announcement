@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,13 +9,29 @@
     <meta property="og:description" content="符合資安規範的學生學籍與成績查詢系統，支援雙因子認證、成績單PDF下載、個資線上確認與處室分級權限管理。" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <!-- GitHub Pages（main/root）導向建置後的 docs；本機開發請用 npm run dev -->
+    <script>
+      (function () {
+        var host = location.hostname;
+        var isPages = host.endsWith('github.io');
+        if (isPages) {
+          var target = location.pathname.indexOf('/docs') === -1
+            ? (location.pathname.replace(/\/?$/, '/') + 'docs/')
+            : null;
+          if (target) {
+            location.replace(target + location.search + location.hash);
+            return;
+          }
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>
+    <!-- 本機 Vite 開發入口；GitHub Pages 會先被上方 script 導向 /docs/ -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

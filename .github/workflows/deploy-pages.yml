@@ -3,6 +3,8 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:
@@ -27,18 +29,41 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build
+      # 目前 repo Pages 仍指向 main，因此建置到 /docs 並用根目錄導向
+      - name: Build for docs folder
         run: npm run build
         env:
-          VITE_BASE_PATH: /announcement/
+          VITE_BASE_PATH: /announcement/docs/
           VITE_SHEETS_API_URL: ${{ secrets.VITE_SHEETS_API_URL }}
 
       - name: Add .nojekyll
         run: touch dist/.nojekyll
 
-      - name: Deploy to gh-pages
+      - name: Publish built site to docs/ on main
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
+          publish_branch: main
+          destination_dir: docs
+          keep_files: true
+          commit_message: 'chore: update GitHub Pages docs build'
+
+      # 同時保留 gh-pages（之後若改成正確 Pages 設定可直接用）
+      - name: Build for gh-pages
+        run: npm run build
+        env:
+          VITE_BASE_PATH: /announcement/
+          VITE_SHEETS_API_URL: ${{ secrets.VITE_SHEETS_API_URL }}
+
+      - name: Add .nojekyll for gh-pages
+        run: touch dist/.nojekyll
+
+      - name: Publish to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
           force_orphan: true
+          commit_message: 'chore: update gh-pages build'
