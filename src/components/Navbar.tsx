@@ -81,7 +81,7 @@ export const Navbar: React.FC<Props> = ({
             </div>
             <div>
               <div className="flex items-center space-x-1.5">
-                <span className="font-bold text-slate-900 text-base sm:text-lg tracking-tight">國立智慧科技大學</span>
+                <span className="font-bold text-slate-900 text-base sm:text-lg tracking-tight">高雄市立中正高工</span>
                 <span className="hidden sm:inline-block text-[10px] bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-full border border-blue-200">
                   校務整合雲
                 </span>

@@ -651,15 +651,15 @@ export const StudentPortal: React.FC<Props> = ({
               {/* School Header */}
               <div className="text-center pb-6 border-b-2 border-slate-800">
                 <div className="flex items-center justify-center space-x-3 mb-2">
-                  <div className="w-10 h-10 rounded-full border-2 border-blue-900 flex items-center justify-center font-bold text-blue-900 text-sm">
-                    NSTU
+                  <div className="w-10 h-10 rounded-full border-2 border-blue-900 flex items-center justify-center font-bold text-blue-900 text-[10px]">
+                    CCVS
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-widest text-slate-950 font-serif">
-                    國立智慧科技大學
+                    高雄市立中正高工
                   </h1>
                 </div>
                 <h2 className="text-sm font-semibold tracking-wide text-slate-600 uppercase font-sans">
-                  National Smart Technology University
+                  Kaohsiung Municipal Chung-Cheng Industrial High School
                 </h2>
                 <div className="text-base sm:text-lg font-bold text-slate-900 mt-2 tracking-widest">
                   學生學期學業成績通知單 / Official Academic Transcript
@@ -804,7 +804,7 @@ export const StudentPortal: React.FC<Props> = ({
                   {/* University Round Seal */}
                   <div className="w-24 h-24 border-3 border-rose-700 rounded-full p-1 flex flex-col items-center justify-center text-center text-rose-700 select-none shadow-xs">
                     <div className="w-full h-full border border-dashed border-rose-500 rounded-full flex flex-col items-center justify-center p-1">
-                      <span className="text-[9px] font-bold">國立智慧科技大學</span>
+                      <span className="text-[9px] font-bold">高雄市立中正高工</span>
                       <span className="text-[11px] font-black font-serif my-0.5">教務處之印</span>
                       <span className="text-[8px] font-mono">OFFICIAL SEAL</span>
                     </div>

@@ -85,7 +85,7 @@ export function maskEmail(email: string): string {
  * 產生動態防偽驗證碼
  */
 export function generateVerificationCode(studentId: string, semesterId: string): string {
-  const salt = 'NSTU-ACAD-VERIFY-2026';
+  const salt = 'CCVS-ACAD-VERIFY-2026';
   const str = `${studentId}-${semesterId}-${salt}`;
   let hash = 0;
   for (let i = 0; i < str.length; i++) {

@@ -15,7 +15,7 @@ export const INITIAL_STUDENTS: StudentProfile[] = [
     advisor: '張慶隆 教授',
     enrollmentStatus: '在學',
     enrollmentDate: '2023-09-01',
-    email: 's1121001@mail.nstu.edu.tw',
+    email: 's1121001@student.ccvs.kh.edu.tw',
     phone: '0912-345-678',
     emergencyContact: {
       name: '王大同 (父)',
@@ -139,7 +139,7 @@ export const INITIAL_STUDENTS: StudentProfile[] = [
     advisor: '林美蘭 教授',
     enrollmentStatus: '在學',
     enrollmentDate: '2023-09-01',
-    email: 's1121002@mail.nstu.edu.tw',
+    email: 's1121002@student.ccvs.kh.edu.tw',
     phone: '0933-222-111',
     emergencyContact: {
       name: '陳國華 (父)',
@@ -207,7 +207,7 @@ export const INITIAL_STUDENTS: StudentProfile[] = [
     advisor: '沈啟明 教授',
     enrollmentStatus: '在學',
     enrollmentDate: '2022-09-01',
-    email: 's1112003@mail.nstu.edu.tw',
+    email: 's1112003@student.ccvs.kh.edu.tw',
     phone: '0955-666-888',
     emergencyContact: {
       name: '林媽媽 (母)',

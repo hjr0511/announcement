@@ -355,7 +355,7 @@ export default function App() {
           <div className="flex items-center space-x-2 text-center sm:text-left">
             <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>
-              國立智慧科技大學 校務資訊系統 • 符合教育部資通安全責任等級規範與個人資料保護法
+              高雄市立中正高工 校務資訊系統 • 符合教育部資通安全責任等級規範與個人資料保護法
             </span>
           </div>
 
@@ -369,7 +369,7 @@ export default function App() {
             <span>|</span>
             <span className="flex items-center space-x-1">
               <PhoneCall className="w-3 h-3" />
-              <span>教務處註冊組專線：(02) 2345-6789 #1201</span>
+              <span>教務處註冊組專線：(07) 711-8171</span>
             </span>
           </div>
         </div>

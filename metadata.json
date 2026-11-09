@@ -1,6 +1,6 @@
 {
-  "name": "智慧校務學生查詢與處室管理系統",
-  "description": "符合資安規範的學生學籍與成績查詢系統，支援雙因子認證、成績單PDF下載、個資線上確認與處室分級權限管理。",
+  "name": "高雄市立中正高工｜學生查詢與處室管理系統",
+  "description": "高雄市立中正高工學生學籍與成績查詢系統，支援雙因子認證、成績單PDF下載、個資線上確認與處室分級權限管理。",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

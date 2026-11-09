@@ -96,7 +96,7 @@ export const AdminPortal: React.FC<Props> = ({
 
   // 複製學生查詢通知訊息
   const handleCopyQueryGuide = () => {
-    const text = `【國立智慧科技大學 教務處通知：113學年度學期成績開放查詢】\n\n各位親愛的同學好：\n本學期個人成績已正式核定並發布！請全體同學至「學生學籍成績查詢系統」登入查詢個人成績與下載成績單 PDF。\n\n▶ 查詢系統網址：${window.location.origin}\n▶ 登入身分：選擇「學生身分」\n▶ 登入帳號：您的個人學號（如：S1121001）\n▶ 登入密碼：身分證字號（如：A123456789，含首碼英文字母共10碼）\n▶ 防偽驗證：請輸入畫面顯示之4位數圖形安全驗證碼\n\n如有任何成績或個資疑問，請洽詢教務處註冊組專線：(02) 2345-6789 分機 1201。`;
+    const text = `【高雄市立中正高工 教務處通知：113學年度學期成績開放查詢】\n\n各位親愛的同學好：\n本學期個人成績已正式核定並發布！請全體同學至「學生學籍成績查詢系統」登入查詢個人成績與下載成績單 PDF。\n\n▶ 查詢系統網址：${window.location.origin}\n▶ 登入身分：選擇「學生身分」\n▶ 登入帳號：您的個人學號（如：S1121001）\n▶ 登入密碼：身分證字號（如：A123456789，含首碼英文字母共10碼）\n▶ 防偽驗證：請輸入畫面顯示之4位數圖形安全驗證碼\n\n如有任何成績或個資疑問，請洽詢教務處註冊組專線：(07) 711-8171。`;
     navigator.clipboard.writeText(text);
     setIsNoticeCopied(true);
     setTimeout(() => setIsNoticeCopied(false), 3000);
@@ -441,7 +441,7 @@ export const AdminPortal: React.FC<Props> = ({
                 advisor: '未指派導師',
                 enrollmentStatus: '在學',
                 enrollmentDate: '2024-09-01',
-                email: `${sId.toLowerCase()}@mail.nstu.edu.tw`,
+                email: `${sId.toLowerCase()}@student.ccvs.kh.edu.tw`,
                 phone: cols[5] || '0912-000-000',
                 emergencyContact: { name: '家長', relationship: '父母', phone: '0911-000-000' },
                 mailingAddress: '臺北市',

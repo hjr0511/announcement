@@ -66,7 +66,7 @@ export function downloadFallbackPdf(student: StudentProfile, semester: SemesterR
   const verifyCode = generateVerificationCode(student.studentId, semester.semesterId);
 
   doc.setFontSize(16);
-  doc.text('National Smart Technology University', 105, 20, { align: 'center' });
+  doc.text('Kaohsiung Municipal Chung-Cheng Industrial High School', 105, 20, { align: 'center' });
   doc.setFontSize(13);
   doc.text('Official Academic Grade Report / Transcript', 105, 28, { align: 'center' });
   doc.setFontSize(10);
