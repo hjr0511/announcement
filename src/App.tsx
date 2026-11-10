@@ -49,15 +49,24 @@ function loadLocalAdminAccounts(): AdminAccount[] {
   return getDefaultAdminAccounts();
 }
 
-function mergeAuditLogs(
+/**
+ * 稽核日誌以工作表為準：
+ * - 工作表已刪除的舊紀錄不再從本機 localStorage 寫回
+ * - 只追加「上次載入之後」在本機新產生的日誌（例如登入軌跡）
+ */
+function mergeAuditLogsSheetsPrimary(
   sheetLogs: AuditLogEntry[],
-  localLogs: AuditLogEntry[]
+  localLogs: AuditLogEntry[],
+  previouslyLoadedIds: Set<string>
 ): AuditLogEntry[] {
-  const map = new Map<string, AuditLogEntry>();
-  [...sheetLogs, ...localLogs].forEach((log) => {
-    if (log?.id) map.set(log.id, log);
-  });
-  return Array.from(map.values()).slice(0, 150);
+  const sheetIds = new Set(
+    sheetLogs.map((log) => log?.id).filter((id): id is string => Boolean(id))
+  );
+  const brandNewLocal = localLogs.filter(
+    (log) =>
+      !!log?.id && !sheetIds.has(log.id) && !previouslyLoadedIds.has(log.id)
+  );
+  return [...brandNewLocal, ...sheetLogs].slice(0, 150);
 }
 
 export default function App() {
@@ -107,6 +116,8 @@ export default function App() {
 
   /** 試算表為主：寫入中禁止自動重新載入覆蓋正在合併的資料 */
   const syncingRef = useRef(false);
+  /** 上次從試算表載入時的稽核 id；用來避免把工作表已刪除的舊日誌又寫回去 */
+  const lastLoadedAuditIdsRef = useRef<Set<string>>(new Set());
 
   const applyBundle = (bundle: {
     students: StudentProfile[];
@@ -118,6 +129,11 @@ export default function App() {
     setUploadedDocs(bundle.documents);
     setAuditLogs(bundle.auditLogs);
     setAdminAccounts(normalizeAdminAccounts(bundle.adminAccounts));
+    lastLoadedAuditIdsRef.current = new Set(
+      bundle.auditLogs
+        .map((log) => log?.id)
+        .filter((id): id is string => Boolean(id))
+    );
     setCurrentStudent((prev) => {
       if (!prev) return null;
       return bundle.students.find((s) => s.studentId === prev.studentId) || prev;
@@ -174,7 +190,11 @@ export default function App() {
       const localAudit = getAuditLogs();
       const base: SheetsBundle = {
         ...latest,
-        auditLogs: mergeAuditLogs(latest.auditLogs, localAudit),
+        auditLogs: mergeAuditLogsSheetsPrimary(
+          latest.auditLogs,
+          localAudit,
+          lastLoadedAuditIdsRef.current
+        ),
       };
       const next = mutator(base);
       await saveToSheets(next);
