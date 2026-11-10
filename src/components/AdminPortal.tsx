@@ -1312,7 +1312,7 @@ export const AdminPortal: React.FC<Props> = ({
                     </div>
                     <p className="text-[11px] text-purple-900/80">
                       {sheetsMode
-                        ? '也可直接到 Google 試算表編輯「處室帳號」工作表，再按上方重新載入。role 請填 academic_affairs / student_affairs / system_admin。'
+                        ? '建議直接在 Google 試算表「處室帳號」維護；此處儲存會合併寫回。role 請填 academic_affairs / student_affairs / system_admin。'
                         : '目前為本機模式；連線 Google 試算表後，帳密會寫入「處室帳號」工作表。'}
                     </p>
                     <div className="overflow-x-auto border border-purple-200 rounded-xl bg-white">

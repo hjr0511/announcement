@@ -61,7 +61,7 @@ export const DataSyncBanner: React.FC<Props> = ({
               ? '正在同步寫回試算表…'
               : status === 'error'
               ? '試算表連線失敗，請檢查 Apps Script 網址與部署權限'
-              : '已連線 Google 試算表（處室可直接在表中維護，學生端重新載入即可查詢）')}
+              : '以 Google 試算表為主：請在工作表維護資料；後台僅作輔助寫入。切回本頁會自動重新載入。')}
         </span>
       </div>
 

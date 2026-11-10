@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  StudentProfile, 
-  RoleType, 
-  AuditLogEntry, 
-  UploadedDocument 
+import {
+  StudentProfile,
+  RoleType,
+  AuditLogEntry,
+  UploadedDocument,
 } from './types';
-import { 
-  INITIAL_STUDENTS, 
-  INITIAL_AUDIT_LOGS, 
-  INITIAL_DOCUMENTS 
+import {
+  INITIAL_STUDENTS,
+  INITIAL_AUDIT_LOGS,
+  INITIAL_DOCUMENTS,
 } from './data/mockData';
 import { getAuditLogs, logAuditEvent } from './utils/security';
 import {
@@ -16,6 +16,7 @@ import {
   loadFromSheets,
   saveToSheets,
   seedSheets,
+  SheetsBundle,
   SheetsSyncStatus,
 } from './services/sheetsApi';
 import { Navbar } from './components/Navbar';
@@ -46,6 +47,17 @@ function loadLocalAdminAccounts(): AdminAccount[] {
     /* ignore */
   }
   return getDefaultAdminAccounts();
+}
+
+function mergeAuditLogs(
+  sheetLogs: AuditLogEntry[],
+  localLogs: AuditLogEntry[]
+): AuditLogEntry[] {
+  const map = new Map<string, AuditLogEntry>();
+  [...sheetLogs, ...localLogs].forEach((log) => {
+    if (log?.id) map.set(log.id, log);
+  });
+  return Array.from(map.values()).slice(0, 150);
 }
 
 export default function App() {
@@ -93,9 +105,8 @@ export default function App() {
   const [showSeed, setShowSeed] = useState(false);
   const [ready, setReady] = useState(!sheetsEnabled);
 
-  // 避免初次載入就立刻回寫覆蓋試算表
-  const skipNextSave = useRef(true);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 試算表為主：寫入中禁止自動重新載入覆蓋正在合併的資料 */
+  const syncingRef = useRef(false);
 
   const applyBundle = (bundle: {
     students: StudentProfile[];
@@ -107,6 +118,10 @@ export default function App() {
     setUploadedDocs(bundle.documents);
     setAuditLogs(bundle.auditLogs);
     setAdminAccounts(normalizeAdminAccounts(bundle.adminAccounts));
+    setCurrentStudent((prev) => {
+      if (!prev) return null;
+      return bundle.students.find((s) => s.studentId === prev.studentId) || prev;
+    });
     try {
       localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(bundle.auditLogs));
     } catch {
@@ -115,19 +130,20 @@ export default function App() {
     setShowSeed(bundle.students.length === 0);
   };
 
-  const reloadFromSheets = async () => {
-    if (!sheetsEnabled) return;
-    setSyncStatus('loading');
-    setSyncMessage('正在從 Google 試算表載入資料…');
+  const reloadFromSheets = async (opts?: { silent?: boolean }) => {
+    if (!sheetsEnabled || syncingRef.current) return;
+    if (!opts?.silent) {
+      setSyncStatus('loading');
+      setSyncMessage('正在從 Google 試算表載入資料…');
+    }
     try {
       const bundle = await loadFromSheets();
-      skipNextSave.current = true;
       applyBundle(bundle);
       setSyncStatus('connected');
       setSyncMessage(
         bundle.students.length === 0
           ? '試算表目前是空的，可點「寫入範例資料」初始化'
-          : `已載入 ${bundle.students.length} 位學生資料`
+          : `以試算表為準：已載入 ${bundle.students.length} 位學生（後台變更才會寫回）`
       );
       setReady(true);
     } catch (err) {
@@ -142,8 +158,49 @@ export default function App() {
     }
   };
 
+  /**
+   * 後台明確操作才寫入：先讀最新試算表再合併，避免覆蓋工作表手動刪改。
+   */
+  const persistFromSheets = async (
+    mutator: (latest: SheetsBundle) => SheetsBundle,
+    successMsg: string
+  ) => {
+    if (!sheetsEnabled) return;
+    syncingRef.current = true;
+    setSyncStatus('saving');
+    setSyncMessage('正在將後台變更合併寫入試算表…');
+    try {
+      const latest = await loadFromSheets();
+      const localAudit = getAuditLogs();
+      const base: SheetsBundle = {
+        ...latest,
+        auditLogs: mergeAuditLogs(latest.auditLogs, localAudit),
+      };
+      const next = mutator(base);
+      await saveToSheets(next);
+      applyBundle(next);
+      setSyncStatus('connected');
+      setSyncMessage(successMsg);
+    } catch (err) {
+      console.error(err);
+      setSyncStatus('error');
+      setSyncMessage(
+        err instanceof Error ? `寫入失敗：${err.message}` : '寫入試算表失敗'
+      );
+      try {
+        const bundle = await loadFromSheets();
+        applyBundle(bundle);
+      } catch {
+        /* ignore secondary reload error */
+      }
+    } finally {
+      syncingRef.current = false;
+    }
+  };
+
   const handleSeed = async () => {
     if (!sheetsEnabled) return;
+    syncingRef.current = true;
     setSyncStatus('saving');
     setSyncMessage('正在把範例資料寫入試算表…');
     const bundle = {
@@ -154,23 +211,43 @@ export default function App() {
     };
     try {
       await seedSheets(bundle);
-      skipNextSave.current = true;
       applyBundle(bundle);
       setSyncStatus('connected');
-      setSyncMessage('範例資料已寫入試算表，各處室可直接在表中維護');
+      setSyncMessage('範例資料已寫入試算表；之後請以工作表維護為主');
     } catch (err) {
       console.error(err);
       setSyncStatus('error');
       setSyncMessage(err instanceof Error ? err.message : '寫入範例資料失敗');
+    } finally {
+      syncingRef.current = false;
     }
   };
 
   useEffect(() => {
     if (sheetsEnabled) {
-      reloadFromSheets();
+      void reloadFromSheets();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 回到分頁時重新載入試算表（工作表為主）
+  useEffect(() => {
+    if (!sheetsEnabled) return;
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && ready && !syncingRef.current) {
+        void reloadFromSheets({ silent: true });
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   // 本機模式：寫入 localStorage
   useEffect(() => {
@@ -203,41 +280,6 @@ export default function App() {
     }
   }, [adminAccounts]);
 
-  // 試算表模式：變更後 debounce 回寫
-  useEffect(() => {
-    if (!sheetsEnabled || !ready) return;
-    if (skipNextSave.current) {
-      skipNextSave.current = false;
-      return;
-    }
-
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      setSyncStatus('saving');
-      setSyncMessage('正在同步寫回試算表…');
-      try {
-        const latestAudit = getAuditLogs();
-        await saveToSheets({
-          students,
-          documents: uploadedDocs,
-          auditLogs: latestAudit.length > 0 ? latestAudit : auditLogs,
-          adminAccounts,
-        });
-        if (latestAudit.length > 0) setAuditLogs(latestAudit);
-        setSyncStatus('connected');
-        setSyncMessage('已同步至 Google 試算表');
-      } catch (err) {
-        console.error(err);
-        setSyncStatus('error');
-        setSyncMessage(err instanceof Error ? err.message : '同步失敗');
-      }
-    }, 1500);
-
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-  }, [students, uploadedDocs, auditLogs, adminAccounts, ready]);
-
   const refreshAuditFromStorage = () => {
     const logs = getAuditLogs();
     if (logs.length > 0) setAuditLogs(logs);
@@ -245,27 +287,85 @@ export default function App() {
 
   const handleUpdateStudent = (updatedStudent: StudentProfile) => {
     setStudents((prev) =>
-      prev.map((s) => (s.studentId === updatedStudent.studentId ? updatedStudent : s))
+      prev.map((s) =>
+        s.studentId === updatedStudent.studentId ? updatedStudent : s
+      )
     );
     if (currentStudent?.studentId === updatedStudent.studentId) {
       setCurrentStudent(updatedStudent);
     }
+    void persistFromSheets((latest) => {
+      const exists = latest.students.some(
+        (s) => s.studentId === updatedStudent.studentId
+      );
+      // 若工作表已刪除該學生，不因後台舊畫面而復原
+      if (!exists) return latest;
+      return {
+        ...latest,
+        students: latest.students.map((s) =>
+          s.studentId === updatedStudent.studentId ? updatedStudent : s
+        ),
+      };
+    }, '已將後台變更合併寫入試算表');
   };
 
   const handleUpdateStudents = (updatedList: StudentProfile[]) => {
+    // 記錄後台操作前的學號，用來區分「新匯入」與「工作表已刪除卻殘留在記憶體」
+    const previousIds = new Set(students.map((s) => s.studentId));
     setStudents(updatedList);
     if (currentStudent) {
-      const refreshed = updatedList.find((s) => s.studentId === currentStudent.studentId);
+      const refreshed = updatedList.find(
+        (s) => s.studentId === currentStudent.studentId
+      );
       if (refreshed) setCurrentStudent(refreshed);
     }
+    void persistFromSheets((latest) => {
+      const updates = new Map(updatedList.map((s) => [s.studentId, s]));
+      const sheetIds = new Set(latest.students.map((s) => s.studentId));
+      // 保留試算表既有學生；以後台同號資料覆蓋
+      const merged = latest.students.map((s) => updates.get(s.studentId) || s);
+      updatedList.forEach((s) => {
+        if (sheetIds.has(s.studentId)) return;
+        // 僅接受後台新匯入的學生，不復原工作表已刪除者
+        if (!previousIds.has(s.studentId)) merged.push(s);
+      });
+      return { ...latest, students: merged };
+    }, '已將後台變更合併寫入試算表（不會復原工作表已刪除的列）');
   };
 
   const handleUploadDoc = (newDoc: UploadedDocument) => {
     setUploadedDocs((prev) => [newDoc, ...prev]);
+    void persistFromSheets(
+      (latest) => ({
+        ...latest,
+        documents: [
+          newDoc,
+          ...latest.documents.filter((d) => d.id !== newDoc.id),
+        ],
+      }),
+      '上傳文件已寫入試算表'
+    );
   };
 
   const handleUpdateUploadedDocs = (updated: UploadedDocument[]) => {
     setUploadedDocs(updated);
+    void persistFromSheets((latest) => {
+      const updates = new Map(updated.map((d) => [d.id, d]));
+      const merged = latest.documents.map((d) => updates.get(d.id) || d);
+      updated.forEach((d) => {
+        if (!latest.documents.some((x) => x.id === d.id)) merged.unshift(d);
+      });
+      return { ...latest, documents: merged };
+    }, '文件審核結果已寫入試算表');
+  };
+
+  const handleUpdateAdminAccounts = (next: AdminAccount[]) => {
+    const normalized = normalizeAdminAccounts(next);
+    setAdminAccounts(normalized);
+    void persistFromSheets(
+      (latest) => ({ ...latest, adminAccounts: normalized }),
+      '處室帳號已寫入試算表「處室帳號」'
+    );
   };
 
   const handleStudentLoginSuccess = (student: StudentProfile) => {
@@ -359,12 +459,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-800 antialiased selection:bg-blue-600 selection:text-white">
-      
       <DataSyncBanner
         status={syncStatus}
         message={syncMessage}
         sheetsEnabled={sheetsEnabled}
-        onReload={reloadFromSheets}
+        onReload={() => void reloadFromSheets()}
         onSeed={handleSeed}
         showSeed={showSeed || (sheetsEnabled && students.length === 0)}
       />
@@ -432,9 +531,7 @@ export default function App() {
                 onUpdateUploadedDocs={handleUpdateUploadedDocs}
                 onOpenSecurityNotice={() => setIsSecurityNoticeOpen(true)}
                 adminAccounts={adminAccounts}
-                onUpdateAdminAccounts={(next) => {
-                  setAdminAccounts(normalizeAdminAccounts(next));
-                }}
+                onUpdateAdminAccounts={handleUpdateAdminAccounts}
               />
             )}
           </>
@@ -471,7 +568,6 @@ export default function App() {
         onClose={() => setIsSecurityNoticeOpen(false)}
         onAccept={() => setIsSecurityNoticeOpen(false)}
       />
-
     </div>
   );
 }
