@@ -16,6 +16,7 @@ import {
   loadFromSheets,
   saveToSheets,
   seedSheets,
+  appendAuditLogs,
   SheetsBundle,
   SheetsSyncStatus,
 } from './services/sheetsApi';
@@ -47,26 +48,6 @@ function loadLocalAdminAccounts(): AdminAccount[] {
     /* ignore */
   }
   return getDefaultAdminAccounts();
-}
-
-/**
- * 稽核日誌以工作表為準：
- * - 工作表已刪除的舊紀錄不再從本機 localStorage 寫回
- * - 只追加「上次載入之後」在本機新產生的日誌（例如登入軌跡）
- */
-function mergeAuditLogsSheetsPrimary(
-  sheetLogs: AuditLogEntry[],
-  localLogs: AuditLogEntry[],
-  previouslyLoadedIds: Set<string>
-): AuditLogEntry[] {
-  const sheetIds = new Set(
-    sheetLogs.map((log) => log?.id).filter((id): id is string => Boolean(id))
-  );
-  const brandNewLocal = localLogs.filter(
-    (log) =>
-      !!log?.id && !sheetIds.has(log.id) && !previouslyLoadedIds.has(log.id)
-  );
-  return [...brandNewLocal, ...sheetLogs].slice(0, 150);
 }
 
 export default function App() {
@@ -176,6 +157,7 @@ export default function App() {
 
   /**
    * 後台明確操作才寫入：先讀最新試算表再合併，避免覆蓋工作表手動刪改。
+   * 稽核日誌工作表預設不動；本機新產生的日誌改走 append，不會復原已刪除列。
    */
   const persistFromSheets = async (
     mutator: (latest: SheetsBundle) => SheetsBundle,
@@ -187,18 +169,21 @@ export default function App() {
     setSyncMessage('正在將後台變更合併寫入試算表…');
     try {
       const latest = await loadFromSheets();
+      const previousAuditIds = lastLoadedAuditIdsRef.current;
+      const next = mutator(latest);
+      await saveToSheets(next); // 不會覆寫稽核日誌工作表
+
       const localAudit = getAuditLogs();
-      const base: SheetsBundle = {
-        ...latest,
-        auditLogs: mergeAuditLogsSheetsPrimary(
-          latest.auditLogs,
-          localAudit,
-          lastLoadedAuditIdsRef.current
-        ),
-      };
-      const next = mutator(base);
-      await saveToSheets(next);
-      applyBundle(next);
+      const sheetIds = new Set(latest.auditLogs.map((l) => l.id));
+      const brandNew = localAudit.filter(
+        (l) => l?.id && !sheetIds.has(l.id) && !previousAuditIds.has(l.id)
+      );
+      if (brandNew.length > 0) {
+        await appendAuditLogs(brandNew);
+      }
+
+      const refreshed = await loadFromSheets();
+      applyBundle(refreshed);
       setSyncStatus('connected');
       setSyncMessage(successMsg);
     } catch (err) {

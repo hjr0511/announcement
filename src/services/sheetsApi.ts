@@ -141,12 +141,36 @@ export async function loadFromSheets(): Promise<SheetsBundle> {
   }
 }
 
-export async function saveToSheets(bundle: SheetsBundle): Promise<void> {
-  await postJson({ action: 'saveAll', data: bundle });
+/**
+ * 寫回試算表。預設不覆寫「稽核日誌」工作表（replaceAuditLogs=false）。
+ * 需搭配已更新的 Apps Script；若尚未重新部署，仍會帶上 bundle.auditLogs 以相容舊版。
+ */
+export async function saveToSheets(
+  bundle: SheetsBundle,
+  opts?: { replaceAuditLogs?: boolean }
+): Promise<void> {
+  await postJson({
+    action: 'saveAll',
+    data: {
+      ...bundle,
+      replaceAuditLogs: opts?.replaceAuditLogs === true,
+    },
+  });
 }
 
 export async function seedSheets(bundle: SheetsBundle): Promise<void> {
-  await postJson({ action: 'seed', data: bundle });
+  await postJson({
+    action: 'seed',
+    data: { ...bundle, replaceAuditLogs: true },
+  });
+}
+
+/** 只追加新的稽核列，不清空、不覆寫工作表既有紀錄 */
+export async function appendAuditLogs(
+  logs: SheetsBundle['auditLogs']
+): Promise<void> {
+  if (!logs.length) return;
+  await postJson({ action: 'appendAudit', logs });
 }
 
 function normalizeBundle(data: SheetsBundle | undefined): SheetsBundle {

@@ -18,6 +18,9 @@
  * 處室帳號欄位：username, password, role, displayName, enabled
  * role 可用：academic_affairs（教務）/ student_affairs（學務）/ system_admin（系統）
  * 表為空時會自動寫入三組預設帳號，可直接在試算表改密碼。
+ *
+ * 稽核日誌：saveAll 預設不覆寫（工作表為主）；新日誌請用 action=appendAudit。
+ * 僅 seed 或 data.replaceAuditLogs=true 時才整表重寫稽核。
  */
 
 var SHEET_NAMES = {
@@ -86,8 +89,15 @@ function doPost(e) {
       return json_({ ok: true, message: 'saved' });
     }
     if (action === 'seed') {
-      writeAll_(body.data || {});
+      // 種子資料才允許整表覆寫稽核日誌
+      var seedData = body.data || {};
+      seedData.replaceAuditLogs = true;
+      writeAll_(seedData);
       return json_({ ok: true, message: 'seeded' });
+    }
+    if (action === 'appendAudit') {
+      appendAuditLogs_(body.logs || []);
+      return json_({ ok: true, message: 'audit appended' });
     }
     if (action === 'getAll') {
       return json_({ ok: true, data: readAll_() });
@@ -562,10 +572,63 @@ function readAll_() {
   };
 }
 
+function appendAuditLogs_(logs) {
+  if (!logs || !logs.length) return;
+  ensureSheets_();
+  var sheet = sheet_(SHEET_NAMES.audit);
+  if (!sheet) return;
+
+  var existing = {};
+  var rows = readRows_(SHEET_NAMES.audit);
+  rows.forEach(function (r) {
+    var id = String(r.id || '').trim();
+    if (id) existing[id] = true;
+  });
+
+  var headers = [
+    'id',
+    'timestamp',
+    'operatorRole',
+    'operatorName',
+    'targetStudentId',
+    'targetStudentName',
+    'action',
+    'ipAddress',
+    'deviceInfo',
+    'securityLevel',
+    'details',
+  ];
+  var toAppend = [];
+  logs.forEach(function (a) {
+    var id = String((a && a.id) || '').trim();
+    if (!id || existing[id]) return;
+    existing[id] = true;
+    toAppend.push([
+      id,
+      String((a && a.timestamp) || ''),
+      String((a && a.operatorRole) || 'system_admin'),
+      String((a && a.operatorName) || ''),
+      String((a && a.targetStudentId) || ''),
+      String((a && a.targetStudentName) || ''),
+      String((a && a.action) || '查詢個人資料'),
+      String((a && a.ipAddress) || ''),
+      String((a && a.deviceInfo) || ''),
+      String((a && a.securityLevel) || '常規'),
+      String((a && a.details) || ''),
+    ]);
+  });
+  if (!toAppend.length) return;
+  sheet
+    .getRange(sheet.getLastRow() + 1, 1, toAppend.length, headers.length)
+    .setValues(toAppend);
+}
+
 function writeAll_(data) {
   var students = data.students || [];
   var documents = data.documents || [];
   var auditLogs = data.auditLogs || [];
+  // 預設不覆寫稽核日誌（工作表為主）；僅 seed 或明確 replaceAuditLogs=true 才整表重寫
+  var replaceAuditLogs = data.replaceAuditLogs === true;
   // 舊前端若未帶 adminAccounts，保留試算表既有帳號，避免被清空
   var hasAdminAccountsField = Object.prototype.hasOwnProperty.call(
     data,
@@ -813,7 +876,9 @@ function writeAll_(data) {
   writeRows_(SHEET_NAMES.attendance, attendanceHeaders, attendanceFlat);
   writeRows_(SHEET_NAMES.accessCodes, accessCodeHeaders, accessCodeFlat);
   writeRows_(SHEET_NAMES.documents, documentHeaders, documents);
-  writeRows_(SHEET_NAMES.audit, auditHeaders, auditLogs);
+  if (replaceAuditLogs) {
+    writeRows_(SHEET_NAMES.audit, auditHeaders, auditLogs);
+  }
 
   if (adminAccounts !== null) {
     var adminFlat = adminAccounts
