@@ -460,7 +460,7 @@ export default function App() {
             <span>|</span>
             <span className="flex items-center space-x-1">
               <PhoneCall className="w-3 h-3" />
-              <span>教務處註冊組專線：(07) 711-8171</span>
+              <span>中正高工專線：(07)7232301</span>
             </span>
           </div>
         </div>
