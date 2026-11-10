@@ -7,6 +7,8 @@ import {
   DisciplinaryRecord 
 } from '../types';
 import { maskNationalId, maskPhone, logAuditEvent } from '../utils/security';
+import { AdminAccount, normalizeAdminRole } from '../config/appMode';
+import { isSheetsEnabled } from '../services/sheetsApi';
 import { 
   Building2, 
   GraduationCap, 
@@ -31,7 +33,9 @@ import {
   Copy,
   HelpCircle,
   Share2,
-  ExternalLink
+  ExternalLink,
+  KeyRound,
+  Trash2
 } from 'lucide-react';
 
 interface Props {
@@ -44,7 +48,15 @@ interface Props {
   uploadedDocs: UploadedDocument[];
   onUpdateUploadedDocs: (updated: UploadedDocument[]) => void;
   onOpenSecurityNotice: () => void;
+  adminAccounts?: AdminAccount[];
+  onUpdateAdminAccounts?: (updated: AdminAccount[]) => void;
 }
+
+const ROLE_LABELS: Record<Exclude<RoleType, 'student'>, string> = {
+  academic_affairs: '教務處',
+  student_affairs: '學務處',
+  system_admin: '系統管理',
+};
 
 export const AdminPortal: React.FC<Props> = ({
   currentRole,
@@ -56,6 +68,8 @@ export const AdminPortal: React.FC<Props> = ({
   uploadedDocs,
   onUpdateUploadedDocs,
   onOpenSecurityNotice,
+  adminAccounts = [],
+  onUpdateAdminAccounts,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.studentId || '');
@@ -95,6 +109,96 @@ export const AdminPortal: React.FC<Props> = ({
   const [newCourseCredits, setNewCourseCredits] = useState(3);
   const [newCourseCategory, setNewCourseCategory] = useState<'必修' | '選修' | '通識'>('選修');
   const [newCourseScore, setNewCourseScore] = useState(92);
+
+  // 處室帳號編輯
+  const [draftAdminAccounts, setDraftAdminAccounts] = useState<AdminAccount[]>(adminAccounts);
+  const [adminAccountMsg, setAdminAccountMsg] = useState<string | null>(null);
+  const sheetsMode = isSheetsEnabled();
+
+  React.useEffect(() => {
+    setDraftAdminAccounts(adminAccounts);
+  }, [adminAccounts]);
+
+  const updateDraftAccount = (
+    index: number,
+    patch: Partial<AdminAccount>
+  ) => {
+    setDraftAdminAccounts((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, ...patch } : row))
+    );
+    setAdminAccountMsg(null);
+  };
+
+  const handleAddAdminAccount = () => {
+    setDraftAdminAccounts((prev) => [
+      ...prev,
+      {
+        username: '',
+        password: '',
+        role: 'academic_affairs',
+        displayName: '',
+        enabled: true,
+      },
+    ]);
+    setAdminAccountMsg(null);
+  };
+
+  const handleRemoveAdminAccount = (index: number) => {
+    setDraftAdminAccounts((prev) => prev.filter((_, i) => i !== index));
+    setAdminAccountMsg(null);
+  };
+
+  const handleSaveAdminAccounts = () => {
+    if (!onUpdateAdminAccounts) return;
+
+    const cleaned: AdminAccount[] = [];
+    for (const row of draftAdminAccounts) {
+      const username = row.username.trim();
+      const password = row.password;
+      const role = normalizeAdminRole(row.role);
+      const displayName = row.displayName.trim() || username;
+      if (!username || !password || !role) {
+        setAdminAccountMsg('請完整填寫帳號、密碼與角色後再儲存');
+        return;
+      }
+      cleaned.push({
+        username,
+        password,
+        role,
+        displayName,
+        enabled: row.enabled !== false,
+      });
+    }
+
+    if (cleaned.length === 0) {
+      setAdminAccountMsg('至少需保留一組可用處室帳號');
+      return;
+    }
+
+    const usernames = cleaned.map((a) => a.username.toLowerCase());
+    if (new Set(usernames).size !== usernames.length) {
+      setAdminAccountMsg('帳號名稱不可重複');
+      return;
+    }
+
+    onUpdateAdminAccounts(cleaned);
+    logAuditEvent({
+      operatorRole: 'system_admin',
+      operatorName: '系統與資安管理員',
+      targetStudentId: '處室帳號',
+      targetStudentName: '行政登入',
+      action: '處室帳號變更',
+      securityLevel: '關鍵變更',
+      details: `更新處室帳號共 ${cleaned.length} 筆（${cleaned
+        .map((a) => a.username)
+        .join('、')}）`,
+    });
+    setAdminAccountMsg(
+      sheetsMode
+        ? '已儲存，將同步寫回 Google 試算表「處室帳號」'
+        : '已儲存至本機（未連線試算表）'
+    );
+  };
 
   // 複製學生查詢通知訊息
   const handleCopyQueryGuide = () => {
@@ -332,7 +436,12 @@ export const AdminPortal: React.FC<Props> = ({
     }
 
     try {
-      const lines = csvContent.trim().split('\n');
+      const lines = csvContent
+        .replace(/^\ufeff/, '')
+        .trim()
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
       let importedCount = 0;
 
       if (csvImportMode === 'grades') {
@@ -415,43 +524,84 @@ export const AdminPortal: React.FC<Props> = ({
       } else if (csvImportMode === 'access_codes') {
         // 格式: 學號,用途,名稱,密碼
         // 用途: mock_exam|english_test|event|other 或 模擬考|英檢|活動|其他
+        if (students.length === 0) {
+          alert('目前系統沒有學生名冊。請先點上方「寫入範例資料」，或先匯入學籍名冊後再匯入通行碼。');
+          return;
+        }
+
         const mapType = (raw: string): 'mock_exam' | 'english_test' | 'event' | 'other' => {
-          const t = raw.trim().toLowerCase();
+          const t = raw.trim().toLowerCase().replace(/^\ufeff/, '');
           if (t === 'mock_exam' || t === '模擬考') return 'mock_exam';
           if (t === 'english_test' || t === '英檢' || t === '英語') return 'english_test';
           if (t === 'event' || t === '活動') return 'event';
           return 'other';
         };
+
+        const parseRow = (rawLine: string): string[] => {
+          // 支援逗號或分號分隔；去掉 BOM／空白
+          const line = rawLine.replace(/^\ufeff/, '').trim();
+          if (!line) return [];
+          const delim = line.includes(';') && !line.includes(',') ? ';' : ',';
+          return line.split(delim).map((c) => c.trim().replace(/^"|"$/g, ''));
+        };
+
         const now = new Date().toLocaleString('zh-TW', { hour12: false });
-        const newStudents = students.map((stu) => {
-          let codes = [...(stu.accessCodes || [])];
-          for (let i = 1; i < lines.length; i++) {
-            const cols = lines[i].split(',').map((c) => c.trim());
-            if (cols.length < 4) continue;
-            const [sId, typeRaw, label, password] = cols;
-            if (sId.toUpperCase() !== stu.studentId.toUpperCase()) continue;
-            const codeType = mapType(typeRaw);
-            const existingIdx = codes.findIndex(
-              (c) => c.label === label || (c.codeType === codeType && c.label === label)
-            );
-            const next = {
-              id:
-                existingIdx >= 0
-                  ? codes[existingIdx].id
-                  : `AC-${stu.studentId}-${Date.now().toString(36)}-${i}`,
-              codeType,
-              label,
-              password,
-              updatedAt: now,
-              note: cols[4] || codes[existingIdx]?.note,
-            };
-            if (existingIdx >= 0) codes[existingIdx] = next;
-            else codes = [next, ...codes];
-            importedCount++;
+        const byId = new Map(students.map((s) => [s.studentId.toUpperCase(), { ...s }]));
+        const unmatched: string[] = [];
+        let skippedHeader = false;
+
+        for (let i = 0; i < lines.length; i++) {
+          const cols = parseRow(lines[i]);
+          if (cols.length < 4) continue;
+          const [sIdRaw, typeRaw, label, password] = cols;
+          const sId = sIdRaw.replace(/^\ufeff/, '').toUpperCase();
+          // 略過表頭
+          if (!skippedHeader && (sId === '學號' || sId === 'STUDENTID' || typeRaw === '用途')) {
+            skippedHeader = true;
+            continue;
           }
-          return { ...stu, accessCodes: codes };
-        });
-        onUpdateStudents(newStudents);
+          if (!sId || !label || !password) continue;
+
+          const stu = byId.get(sId);
+          if (!stu) {
+            unmatched.push(sId);
+            continue;
+          }
+
+          const codeType = mapType(typeRaw);
+          const codes = [...(stu.accessCodes || [])];
+          const existingIdx = codes.findIndex(
+            (c) => c.label === label || (c.codeType === codeType && c.label === label)
+          );
+          const next = {
+            id:
+              existingIdx >= 0
+                ? codes[existingIdx].id
+                : `AC-${stu.studentId}-${Date.now().toString(36)}-${i}`,
+            codeType,
+            label,
+            password,
+            updatedAt: now,
+            note: cols[4] || codes[existingIdx]?.note,
+          };
+          if (existingIdx >= 0) codes[existingIdx] = next;
+          else codes.unshift(next);
+          byId.set(sId, { ...stu, accessCodes: codes });
+          importedCount++;
+        }
+
+        onUpdateStudents(Array.from(byId.values()));
+
+        if (importedCount === 0) {
+          const known = students.map((s) => s.studentId).join('、') || '(無)';
+          alert(
+            `沒有匯入任何通行碼。\n\n常見原因：CSV 學號與系統名冊不一致。\n目前系統學號：${known}\n未對到的學號：${
+              unmatched.length ? [...new Set(unmatched)].join('、') : '(無法解析列)'
+            }\n\n請先確認名冊有這些學生，或點「寫入範例資料」後再匯入。`
+          );
+          return;
+        }
+
         logAuditEvent({
           operatorRole: 'academic_affairs',
           operatorName: '教務處註冊組組長',
@@ -459,14 +609,22 @@ export const AdminPortal: React.FC<Props> = ({
           targetStudentName: `${importedCount} 筆`,
           action: '教務處成績修改',
           securityLevel: '關鍵變更',
-          details: `批次匯入學生通行碼（模擬考／英檢等）共 ${importedCount} 筆`,
+          details: `批次匯入學生通行碼（模擬考／英檢等）共 ${importedCount} 筆${
+            unmatched.length ? `；未對到學號：${[...new Set(unmatched)].join(',')}` : ''
+          }`,
         });
-        setCsvSuccessMsg(`✓ 成功匯入 ${importedCount} 筆通行碼！學生登入後可於「我的通行碼」查看。`);
+        const extra =
+          unmatched.length > 0
+            ? `（另有 ${[...new Set(unmatched)].length} 個學號名冊中找不到，已略過）`
+            : '';
+        setCsvSuccessMsg(
+          `✓ 成功匯入 ${importedCount} 筆通行碼！學生登入後可於「我的通行碼」查看。${extra}`
+        );
         setTimeout(() => {
           setIsCsvModalOpen(false);
           setCsvSuccessMsg(null);
           setCsvContent('');
-        }, 1800);
+        }, 2200);
       } else {
         // 學生學籍名冊匯入模式: 學號,身分證字號,姓名,學系,年級,聯絡電話
         const newStudents = [...students];
@@ -681,7 +839,7 @@ export const AdminPortal: React.FC<Props> = ({
             )}
             {currentRole === 'system_admin' && (
               <>
-                <strong>資安長與系統管理處：</strong>監控全校個資調閱軌跡 (Audit Logs)、管理資料脫敏與遮罩開關、阻斷異常登入。
+                <strong>資安長與系統管理處：</strong>監控全校個資調閱軌跡 (Audit Logs)、管理處室登入帳密（Google 試算表「處室帳號」）、資料脫敏與遮罩開關。
               </>
             )}
           </span>
@@ -1127,6 +1285,142 @@ export const AdminPortal: React.FC<Props> = ({
               {/* VIEW FOR SYSTEM ADMIN (系統與資安管理處視角) */}
               {currentRole === 'system_admin' && (
                 <div className="space-y-5">
+                  <div className="space-y-3 p-4 rounded-2xl border border-purple-200 bg-purple-50/40">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <h3 className="font-bold text-slate-800 text-sm flex items-center space-x-1.5">
+                        <KeyRound className="w-4 h-4 text-purple-600" />
+                        <span>處室登入帳號（可改 Google 試算表「處室帳號」）</span>
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleAddAdminAccount}
+                          className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white border border-purple-200 text-purple-800 hover:bg-purple-100 inline-flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          新增
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveAdminAccounts}
+                          className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-purple-700 text-white hover:bg-purple-800 inline-flex items-center gap-1"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          儲存帳密
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-purple-900/80">
+                      {sheetsMode
+                        ? '也可直接到 Google 試算表編輯「處室帳號」工作表，再按上方重新載入。role 請填 academic_affairs / student_affairs / system_admin。'
+                        : '目前為本機模式；連線 Google 試算表後，帳密會寫入「處室帳號」工作表。'}
+                    </p>
+                    <div className="overflow-x-auto border border-purple-200 rounded-xl bg-white">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-purple-100/70 text-purple-900 font-semibold border-b border-purple-200">
+                          <tr>
+                            <th className="py-2 px-2">帳號</th>
+                            <th className="py-2 px-2">密碼</th>
+                            <th className="py-2 px-2">角色</th>
+                            <th className="py-2 px-2">顯示名稱</th>
+                            <th className="py-2 px-2">啟用</th>
+                            <th className="py-2 px-2"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-purple-50">
+                          {draftAdminAccounts.map((row, index) => (
+                            <tr key={`${row.username}-${index}`}>
+                              <td className="py-1.5 px-2">
+                                <input
+                                  value={row.username}
+                                  onChange={(e) =>
+                                    updateDraftAccount(index, {
+                                      username: e.target.value,
+                                    })
+                                  }
+                                  className="w-28 px-2 py-1 rounded-lg border border-slate-200"
+                                  placeholder="username"
+                                />
+                              </td>
+                              <td className="py-1.5 px-2">
+                                <input
+                                  value={row.password}
+                                  onChange={(e) =>
+                                    updateDraftAccount(index, {
+                                      password: e.target.value,
+                                    })
+                                  }
+                                  className="w-36 px-2 py-1 rounded-lg border border-slate-200 font-mono"
+                                  placeholder="password"
+                                />
+                              </td>
+                              <td className="py-1.5 px-2">
+                                <select
+                                  value={row.role}
+                                  onChange={(e) =>
+                                    updateDraftAccount(index, {
+                                      role: e.target
+                                        .value as Exclude<RoleType, 'student'>,
+                                    })
+                                  }
+                                  className="px-2 py-1 rounded-lg border border-slate-200 bg-white"
+                                >
+                                  {(
+                                    Object.keys(ROLE_LABELS) as Array<
+                                      Exclude<RoleType, 'student'>
+                                    >
+                                  ).map((role) => (
+                                    <option key={role} value={role}>
+                                      {ROLE_LABELS[role]}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="py-1.5 px-2">
+                                <input
+                                  value={row.displayName}
+                                  onChange={(e) =>
+                                    updateDraftAccount(index, {
+                                      displayName: e.target.value,
+                                    })
+                                  }
+                                  className="w-36 px-2 py-1 rounded-lg border border-slate-200"
+                                  placeholder="顯示名稱"
+                                />
+                              </td>
+                              <td className="py-1.5 px-2 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={row.enabled !== false}
+                                  onChange={(e) =>
+                                    updateDraftAccount(index, {
+                                      enabled: e.target.checked,
+                                    })
+                                  }
+                                />
+                              </td>
+                              <td className="py-1.5 px-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAdminAccount(index)}
+                                  className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
+                                  title="刪除"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {adminAccountMsg && (
+                      <div className="text-[11px] text-purple-900 bg-white border border-purple-200 rounded-lg px-3 py-2">
+                        {adminAccountMsg}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <h3 className="font-bold text-slate-800 text-sm flex items-center space-x-1.5">
                       <ShieldCheck className="w-4 h-4 text-purple-600" />

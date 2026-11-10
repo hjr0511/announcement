@@ -3,11 +3,13 @@ import {
   UploadedDocument,
   AuditLogEntry,
 } from '../types';
+import { AdminAccount, normalizeAdminAccounts } from '../config/appMode';
 
 export interface SheetsBundle {
   students: StudentProfile[];
   documents: UploadedDocument[];
   auditLogs: AuditLogEntry[];
+  adminAccounts: AdminAccount[];
 }
 
 export type SheetsSyncStatus =
@@ -152,5 +154,6 @@ function normalizeBundle(data: SheetsBundle | undefined): SheetsBundle {
     students: Array.isArray(data?.students) ? data!.students : [],
     documents: Array.isArray(data?.documents) ? data!.documents : [],
     auditLogs: Array.isArray(data?.auditLogs) ? data!.auditLogs : [],
+    adminAccounts: normalizeAdminAccounts(data?.adminAccounts),
   };
 }

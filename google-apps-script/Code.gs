@@ -13,7 +13,11 @@
  * 6. 重新 npm run dev；前端會自動載入，若表是空的可一鍵寫入範例資料
  *
  * 工作表（自動建立）：
- * 學籍 / 學期彙總 / 成績科目 / 獎懲 / 出缺勤 / 通行碼 / 文件審核 / 稽核日誌
+ * 學籍 / 學期彙總 / 成績科目 / 獎懲 / 出缺勤 / 通行碼 / 文件審核 / 稽核日誌 / 處室帳號
+ *
+ * 處室帳號欄位：username, password, role, displayName, enabled
+ * role 可用：academic_affairs（教務）/ student_affairs（學務）/ system_admin（系統）
+ * 表為空時會自動寫入三組預設帳號，可直接在試算表改密碼。
  */
 
 var SHEET_NAMES = {
@@ -25,7 +29,32 @@ var SHEET_NAMES = {
   accessCodes: '通行碼',
   documents: '文件審核',
   audit: '稽核日誌',
+  adminAccounts: '處室帳號',
 };
+
+var DEFAULT_ADMIN_ACCOUNTS = [
+  {
+    username: 'academic',
+    password: 'CcvsAcad113',
+    role: 'academic_affairs',
+    displayName: '教務處註冊組',
+    enabled: true,
+  },
+  {
+    username: 'studentaffairs',
+    password: 'CcvsStu113',
+    role: 'student_affairs',
+    displayName: '學務處生輔組',
+    enabled: true,
+  },
+  {
+    username: 'admin',
+    password: 'CcvsAdmin113',
+    role: 'system_admin',
+    displayName: '系統與資安管理員',
+    enabled: true,
+  },
+];
 
 function doGet(e) {
   try {
@@ -201,6 +230,10 @@ function ensureSheets_() {
         'details',
       ],
     ],
+    [
+      SHEET_NAMES.adminAccounts,
+      ['username', 'password', 'role', 'displayName', 'enabled'],
+    ],
   ];
 
   specs.forEach(function (spec) {
@@ -217,11 +250,75 @@ function ensureSheets_() {
     }
   });
 
+  // 處室帳號表為空時寫入預設帳密，方便學校直接在試算表修改
+  seedAdminAccountsIfEmpty_();
+
   // 移除預設「工作表1」若已有我們的表
   var def = ss.getSheetByName('工作表1');
   if (def && ss.getSheets().length > 1) {
     ss.deleteSheet(def);
   }
+}
+
+function seedAdminAccountsIfEmpty_() {
+  var rows = readRows_(SHEET_NAMES.adminAccounts);
+  if (rows.length > 0) return;
+  writeRows_(
+    SHEET_NAMES.adminAccounts,
+    ['username', 'password', 'role', 'displayName', 'enabled'],
+    DEFAULT_ADMIN_ACCOUNTS
+  );
+}
+
+function normalizeAdminRole_(raw) {
+  var v = String(raw || '')
+    .trim()
+    .toLowerCase();
+  if (v === 'academic_affairs' || v === 'academic' || v === '教務' || v === '教務處') {
+    return 'academic_affairs';
+  }
+  if (
+    v === 'student_affairs' ||
+    v === 'studentaffairs' ||
+    v === '學務' ||
+    v === '學務處'
+  ) {
+    return 'student_affairs';
+  }
+  if (
+    v === 'system_admin' ||
+    v === 'admin' ||
+    v === '系統' ||
+    v === '系統管理' ||
+    v === '系統管理員'
+  ) {
+    return 'system_admin';
+  }
+  return '';
+}
+
+function readAdminAccounts_() {
+  return readRows_(SHEET_NAMES.adminAccounts)
+    .map(function (a) {
+      var username = String(a.username || '').trim();
+      var password = String(a.password || '');
+      var role = normalizeAdminRole_(a.role);
+      var displayName = String(a.displayName || '').trim();
+      var enabled = a.enabled === '' || a.enabled === null || a.enabled === undefined
+        ? true
+        : toBool_(a.enabled);
+      if (!username || !password || !role) return null;
+      return {
+        username: username,
+        password: password,
+        role: role,
+        displayName: displayName || username,
+        enabled: enabled,
+      };
+    })
+    .filter(function (a) {
+      return !!a;
+    });
 }
 
 function sheet_(name) {
@@ -455,13 +552,28 @@ function readAll_() {
     };
   });
 
-  return { students: students, documents: documents, auditLogs: auditLogs };
+  var adminAccounts = readAdminAccounts_();
+
+  return {
+    students: students,
+    documents: documents,
+    auditLogs: auditLogs,
+    adminAccounts: adminAccounts,
+  };
 }
 
 function writeAll_(data) {
   var students = data.students || [];
   var documents = data.documents || [];
   var auditLogs = data.auditLogs || [];
+  // 舊前端若未帶 adminAccounts，保留試算表既有帳號，避免被清空
+  var hasAdminAccountsField = Object.prototype.hasOwnProperty.call(
+    data,
+    'adminAccounts'
+  );
+  var adminAccounts = hasAdminAccountsField
+    ? data.adminAccounts || []
+    : null;
 
   var studentHeaders = [
     'studentId',
@@ -574,6 +686,13 @@ function writeAll_(data) {
     'deviceInfo',
     'securityLevel',
     'details',
+  ];
+  var adminAccountHeaders = [
+    'username',
+    'password',
+    'role',
+    'displayName',
+    'enabled',
   ];
 
   var studentFlat = [];
@@ -695,4 +814,36 @@ function writeAll_(data) {
   writeRows_(SHEET_NAMES.accessCodes, accessCodeHeaders, accessCodeFlat);
   writeRows_(SHEET_NAMES.documents, documentHeaders, documents);
   writeRows_(SHEET_NAMES.audit, auditHeaders, auditLogs);
+
+  if (adminAccounts !== null) {
+    var adminFlat = adminAccounts
+      .map(function (a) {
+        var username = String((a && a.username) || '').trim();
+        var password = String((a && a.password) || '');
+        var role = normalizeAdminRole_(a && a.role);
+        var displayName = String((a && a.displayName) || '').trim();
+        var enabled =
+          a && (a.enabled === false || a.enabled === 'FALSE' || a.enabled === 0)
+            ? false
+            : true;
+        if (!username || !password || !role) return null;
+        return {
+          username: username,
+          password: password,
+          role: role,
+          displayName: displayName || username,
+          enabled: enabled,
+        };
+      })
+      .filter(function (a) {
+        return !!a;
+      });
+
+    // 若前端送來空陣列，改寫回預設帳號，避免整表被清空導致無法登入
+    writeRows_(
+      SHEET_NAMES.adminAccounts,
+      adminAccountHeaders,
+      adminFlat.length > 0 ? adminFlat : DEFAULT_ADMIN_ACCOUNTS
+    );
+  }
 }

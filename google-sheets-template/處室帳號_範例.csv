@@ -1,0 +1,4 @@
+username,password,role,displayName,enabled
+academic,CcvsAcad113,academic_affairs,教務處註冊組,TRUE
+studentaffairs,CcvsStu113,student_affairs,學務處生輔組,TRUE
+admin,CcvsAdmin113,system_admin,系統與資安管理員,TRUE

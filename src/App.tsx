@@ -25,12 +25,28 @@ import { AdminPortal } from './components/AdminPortal';
 import { AdminLogin } from './components/AdminLogin';
 import { SecurityNoticeModal } from './components/SecurityNoticeModal';
 import { DataSyncBanner } from './components/DataSyncBanner';
-import { isDemoMode } from './config/appMode';
+import {
+  AdminAccount,
+  getDefaultAdminAccounts,
+  isDemoMode,
+  normalizeAdminAccounts,
+} from './config/appMode';
 import { ShieldCheck, PhoneCall } from 'lucide-react';
 
 const AUDIT_STORAGE_KEY = 'school_portal_audit_logs';
+const ADMIN_ACCOUNTS_STORAGE_KEY = 'school_portal_admin_accounts';
 const sheetsEnabled = isSheetsEnabled();
 const demoMode = isDemoMode();
+
+function loadLocalAdminAccounts(): AdminAccount[] {
+  try {
+    const saved = localStorage.getItem(ADMIN_ACCOUNTS_STORAGE_KEY);
+    if (saved) return normalizeAdminAccounts(JSON.parse(saved));
+  } catch {
+    /* ignore */
+  }
+  return getDefaultAdminAccounts();
+}
 
 export default function App() {
   const [students, setStudents] = useState<StudentProfile[]>(() => {
@@ -49,6 +65,9 @@ export default function App() {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [authView, setAuthView] = useState<'student' | 'admin'>('student');
   const [adminDisplayName, setAdminDisplayName] = useState('');
+  const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>(() =>
+    sheetsEnabled ? getDefaultAdminAccounts() : loadLocalAdminAccounts()
+  );
 
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => {
     if (sheetsEnabled) return [];
@@ -82,10 +101,12 @@ export default function App() {
     students: StudentProfile[];
     documents: UploadedDocument[];
     auditLogs: AuditLogEntry[];
+    adminAccounts?: AdminAccount[];
   }) => {
     setStudents(bundle.students);
     setUploadedDocs(bundle.documents);
     setAuditLogs(bundle.auditLogs);
+    setAdminAccounts(normalizeAdminAccounts(bundle.adminAccounts));
     try {
       localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(bundle.auditLogs));
     } catch {
@@ -129,6 +150,7 @@ export default function App() {
       students: INITIAL_STUDENTS,
       documents: INITIAL_DOCUMENTS,
       auditLogs: INITIAL_AUDIT_LOGS,
+      adminAccounts: normalizeAdminAccounts(adminAccounts),
     };
     try {
       await seedSheets(bundle);
@@ -169,6 +191,18 @@ export default function App() {
     }
   }, [uploadedDocs]);
 
+  useEffect(() => {
+    if (sheetsEnabled) return;
+    try {
+      localStorage.setItem(
+        ADMIN_ACCOUNTS_STORAGE_KEY,
+        JSON.stringify(adminAccounts)
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  }, [adminAccounts]);
+
   // 試算表模式：變更後 debounce 回寫
   useEffect(() => {
     if (!sheetsEnabled || !ready) return;
@@ -187,6 +221,7 @@ export default function App() {
           students,
           documents: uploadedDocs,
           auditLogs: latestAudit.length > 0 ? latestAudit : auditLogs,
+          adminAccounts,
         });
         if (latestAudit.length > 0) setAuditLogs(latestAudit);
         setSyncStatus('connected');
@@ -201,7 +236,7 @@ export default function App() {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [students, uploadedDocs, auditLogs, ready]);
+  }, [students, uploadedDocs, auditLogs, adminAccounts, ready]);
 
   const refreshAuditFromStorage = () => {
     const logs = getAuditLogs();
@@ -371,6 +406,7 @@ export default function App() {
               <AdminLogin
                 onLoginSuccess={handleAdminLoginSuccess}
                 onBackToStudent={() => setAuthView('student')}
+                adminAccounts={adminAccounts}
               />
             )}
 
@@ -395,6 +431,10 @@ export default function App() {
                 uploadedDocs={uploadedDocs}
                 onUpdateUploadedDocs={handleUpdateUploadedDocs}
                 onOpenSecurityNotice={() => setIsSecurityNoticeOpen(true)}
+                adminAccounts={adminAccounts}
+                onUpdateAdminAccounts={(next) => {
+                  setAdminAccounts(normalizeAdminAccounts(next));
+                }}
               />
             )}
           </>

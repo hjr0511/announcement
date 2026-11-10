@@ -113,7 +113,7 @@ export interface AuditLogEntry {
   operatorName: string;
   targetStudentId: string;
   targetStudentName: string;
-  action: '登入驗證' | '查詢個人資料' | '下載成績單PDF' | '確認個資送出' | '上傳個人證件' | '教務處成績修改' | '學務處查閱操行' | '資安遮罩調整' | '匯入學籍資料';
+  action: '登入驗證' | '查詢個人資料' | '下載成績單PDF' | '確認個資送出' | '上傳個人證件' | '教務處成績修改' | '學務處查閱操行' | '資安遮罩調整' | '匯入學籍資料' | '處室帳號變更';
   ipAddress: string;
   deviceInfo: string;
   securityLevel: '常規' | '敏感調閱' | '關鍵變更';

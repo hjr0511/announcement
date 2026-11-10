@@ -9,15 +9,20 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { RoleType } from '../types';
-import { authenticateAdmin, isDemoMode } from '../config/appMode';
+import { AdminAccount, authenticateAdmin, isDemoMode } from '../config/appMode';
 import { logAuditEvent } from '../utils/security';
 
 interface Props {
   onLoginSuccess: (role: Exclude<RoleType, 'student'>, displayName: string) => void;
   onBackToStudent: () => void;
+  adminAccounts?: AdminAccount[];
 }
 
-export const AdminLogin: React.FC<Props> = ({ onLoginSuccess, onBackToStudent }) => {
+export const AdminLogin: React.FC<Props> = ({
+  onLoginSuccess,
+  onBackToStudent,
+  adminAccounts,
+}) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -28,7 +33,7 @@ export const AdminLogin: React.FC<Props> = ({ onLoginSuccess, onBackToStudent })
     e.preventDefault();
     setErrorMessage('');
 
-    const account = authenticateAdmin(username, password);
+    const account = authenticateAdmin(username, password, adminAccounts);
     if (!account) {
       setErrorMessage('帳號或密碼不正確');
       logAuditEvent({
@@ -127,11 +132,20 @@ export const AdminLogin: React.FC<Props> = ({ onLoginSuccess, onBackToStudent })
             <div className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 space-y-1">
               <div className="font-bold flex items-center space-x-1">
                 <KeyRound className="w-3.5 h-3.5" />
-                <span>Demo 提示帳號</span>
+                <span>Demo 提示帳號（正式環境請改試算表「處室帳號」）</span>
               </div>
-              <p>academic / CcvsAcad113（教務）</p>
-              <p>studentaffairs / CcvsStu113（學務）</p>
-              <p>admin / CcvsAdmin113（系統）</p>
+              {(adminAccounts && adminAccounts.length > 0
+                ? adminAccounts.filter((a) => a.enabled !== false)
+                : [
+                    { username: 'academic', password: 'CcvsAcad113', displayName: '教務' },
+                    { username: 'studentaffairs', password: 'CcvsStu113', displayName: '學務' },
+                    { username: 'admin', password: 'CcvsAdmin113', displayName: '系統' },
+                  ]
+              ).map((a) => (
+                <p key={a.username}>
+                  {a.username} / {a.password}（{a.displayName}）
+                </p>
+              ))}
             </div>
           )}
         </form>

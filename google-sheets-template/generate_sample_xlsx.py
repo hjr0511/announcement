@@ -333,6 +333,16 @@ for row in [
     ws.append(row)
 autosize(ws)
 
+ws = wb.create_sheet("處室帳號")
+style_header(ws, ["username", "password", "role", "displayName", "enabled"])
+for row in [
+    ["academic", "CcvsAcad113", "academic_affairs", "教務處註冊組", True],
+    ["studentaffairs", "CcvsStu113", "student_affairs", "學務處生輔組", True],
+    ["admin", "CcvsAdmin113", "system_admin", "系統與資安管理員", True],
+]:
+    ws.append(row)
+autosize(ws)
+
 ws = wb.create_sheet("稽核日誌")
 style_header(
     ws,
