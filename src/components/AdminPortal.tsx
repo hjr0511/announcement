@@ -742,7 +742,10 @@ export const AdminPortal: React.FC<Props> = ({
       filename = '學生學籍名冊匯入範本_教務處.csv';
     }
 
-    const blob = new Blob([header + sample], { type: 'text/csv;charset=utf-8;' });
+    // 加上 UTF-8 BOM，避免 Excel 用 Big5/ANSI 開啟造成中文亂碼
+    const blob = new Blob(['\uFEFF' + header + sample], {
+      type: 'text/csv;charset=utf-8;',
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
